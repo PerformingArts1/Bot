@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
+import magic  # For file content validation
 
 # Import Ollama and other necessary libraries from Langchain
 from langchain_community.llms import Ollama
@@ -19,7 +20,7 @@ from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.documents import Document as LangchainDocument # Alias to avoid conflict
+from langchain_core.documents import Document as LangchainDocument  # Alias to avoid conflict
 
 # Import unstructured for document parsing
 from unstructured.partition.auto import partition
@@ -35,7 +36,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for all routes
+CORS(app)  # Enable CORS for all routes
 
 # --- Configuration ---
 DATA_DIR = 'data'
@@ -66,13 +67,13 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.7))
 LLM_TOP_K = int(os.getenv("LLM_TOP_K", 40))
 LLM_TOP_P = float(os.getenv("LLM_TOP_P", 0.9))
 
-llm = None # Will be initialized in initialize_rag_system
-embeddings = None # Will be initialized in initialize_rag_system
+llm = None  # Will be initialized in initialize_rag_system
+embeddings = None  # Will be initialized in initialize_rag_system
 vectorstore = None
-retrieval_chain = None # The main RAG chain
+retrieval_chain = None  # The main RAG chain
 
-chat_history_data = [] # Stores chat messages (in-memory, also persisted to file)
-documents_metadata = {} # Stores metadata about uploaded documents {doc_id: {filename, path, upload_date, num_chunks}}
+chat_history_data = []  # Stores chat messages (in-memory, also persisted to file)
+documents_metadata = {}  # Stores metadata about uploaded documents {doc_id: {filename, path, upload_date, num_chunks}}
 
 # --- Utility Functions ---
 
@@ -214,21 +215,31 @@ def index():
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
     if 'file' not in request.files:
-        return jsonify({"error": "No file part", "success": False}), 400
+        return jsonify({"success": False, "error": "No file part"}), 400
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "No selected file", "success": False}), 400
+        return jsonify({"success": False, "error": "No selected file"}), 400
+
     if not allowed_file(file.filename):
-        return jsonify({"error": "Unsupported file type", "success": False}), 400
+        return jsonify({"success": False, "error": "Unsupported file type"}), 400
+
     if file:
         original_filename = secure_filename(file.filename)
         document_id = str(uuid.uuid4())
         file_extension = os.path.splitext(original_filename)[1].lower()
         filename_on_disk = f"{document_id}{file_extension}"
         filepath = os.path.join(UPLOAD_FOLDER, filename_on_disk)
-        file.save(filepath)
 
         try:
+            # Validate file content using python-magic
+            mime = magic.Magic(mime=True)
+            file_type = mime.from_file(filepath)
+            if file_type not in ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']:
+                os.remove(filepath)
+                return jsonify({"success": False, "error": "Invalid file content type"}), 400
+
+            file.save(filepath)
+
             elements = partition(filename=filepath)
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
             langchain_docs = []
@@ -249,7 +260,7 @@ def upload_document():
 
             if not langchain_docs:
                 os.remove(filepath)
-                return jsonify({"error": "Could not extract content from document. Ensure it's a supported format (PDF, TXT, DOCX, etc.) and not empty.", "success": False}), 500
+                return jsonify({"success": False, "error": "Could not extract content from document. Ensure it's a supported format (PDF, TXT, DOCX, etc.) and not empty."}), 500
 
             global vectorstore
             if vectorstore is None:
@@ -260,7 +271,7 @@ def upload_document():
                 vectorstore.persist()
             else:
                 os.remove(filepath)
-                return jsonify({"error": "Vector store not initialized. Cannot index document.", "success": False}), 500
+                return jsonify({"success": False, "error": "Vector store not initialized. Cannot index document."}), 500
 
             documents_metadata[document_id] = {
                 "original_filename": original_filename,
@@ -273,16 +284,18 @@ def upload_document():
             _create_rag_chain()
 
             return jsonify({
+                "success": True,
                 "message": "Document uploaded and processed successfully",
                 "id": document_id,
                 "original_filename": original_filename,
-                "num_chunks": len(langchain_docs),
-                "success": True
+                "num_chunks": len(langchain_docs)
             }), 200
+
         except Exception as e:
-            os.remove(filepath)
-            logger.error(f"Error processing document: {e}")
-            return jsonify({"error": f"Error processing document: {e}. Check backend console for details.", "success": False}), 500
+            logger.exception(f"Error processing document: {e}")  # Use logger.exception for full traceback
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({"success": False, "error": f"Error processing document: {e}. Check backend console for details."}), 500
 
 @app.route('/documents', methods=['GET'])
 def get_documents():
@@ -311,17 +324,17 @@ def get_documents():
     paginated_docs = filtered_docs[start_index:end_index]
 
     return jsonify({
+        "success": True,
         "documents": paginated_docs,
         "total_documents": total_documents,
         "page": page,
-        "limit": limit,
-        "success": True
+        "limit": limit
     }), 200
 
 @app.route('/delete_document/<document_id>', methods=['DELETE'])
 def delete_document(document_id):
     if document_id not in documents_metadata:
-        return jsonify({"error": "Document not found", "success": False}), 404
+        return jsonify({"success": False, "error": "Document not found"}), 404
 
     doc_info = documents_metadata[document_id]
     filepath = doc_info['filepath']
@@ -343,40 +356,41 @@ def delete_document(document_id):
         save_documents_metadata()
         _create_rag_chain()
 
-        return jsonify({"message": "Document deleted successfully", "success": True}), 200
+        return jsonify({"success": True, "message": "Document deleted successfully"}), 200
     except Exception as e:
-        logger.error(f"Error deleting document {document_id}: {e}")
-        return jsonify({"error": f"Failed to delete document: {str(e)}", "success": False}), 500
+        logger.exception(f"Error deleting document {document_id}: {e}")
+        return jsonify({"success": False, "error": f"Failed to delete document: {str(e)}"}), 500
 
 @app.route('/preview_extracted_text/<document_id>', methods=['GET'])
 def preview_extracted_text(document_id):
     if document_id not in documents_metadata:
-        return jsonify({"error": "Document not found", "success": False}), 404
+        return jsonify({"success": False, "error": "Document not found"}), 404
 
     filepath = documents_metadata[document_id]['filepath']
     if not os.path.exists(filepath):
-        return jsonify({"error": "Document file not found on server", "success": False}), 404
+        return jsonify({"success": False, "error": "Document file not found on server"}), 404
 
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read(PREVIEW_CHAR_LIMIT)
-        return jsonify({"content": content, "success": True}), 200
+        return jsonify({"success": True, "content": content}), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to read document content: {str(e)}", "success": False}), 500
+        logger.exception(f"Failed to read document content: {e}")
+        return jsonify({"success": False, "error": f"Failed to read document content: {str(e)}"}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_message_content = data.get('message')
     if not user_message_content:
-        return jsonify({"error": "No message provided", "success": False}), 400
+        return jsonify({"success": False, "error": "No message provided"}), 400
 
     chat_history_data.append({"role": "user", "content": user_message_content, "timestamp": datetime.datetime.now().isoformat()})
     save_chat_history()
 
     try:
         if retrieval_chain is None:
-            return jsonify({"error": "RAG system not fully initialized. Please check backend logs.", "success": False}), 500
+            return jsonify({"success": False, "error": "RAG system not fully initialized. Please check backend logs."}), 500
 
         messages = []
         for msg in chat_history_data:
@@ -403,10 +417,10 @@ def chat():
                 sources.append(source_info)
 
         assistant_response = {
+            "success": True,
             "response": response_content,
             "sources": sources,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "success": True
+            "timestamp": datetime.datetime.now().isoformat()
         }
 
         chat_history_data.append({"role": "assistant", "content": assistant_response["response"], "timestamp": assistant_response["timestamp"], "sources": assistant_response["sources"]})
@@ -415,31 +429,31 @@ def chat():
         return jsonify(assistant_response), 200
 
     except Exception as e:
-        logger.error(f"Error during chat: {e}")
+        logger.exception(f"Error during chat: {e}")
         error_message = f"An error occurred while processing your request: {e}. Please check the backend console."
         chat_history_data.append({"role": "assistant", "content": error_message, "timestamp": datetime.datetime.now().isoformat(), "isError": True})
         save_chat_history()
-        return jsonify({"error": error_message, "success": False}), 500
+        return jsonify({"success": False, "error": error_message}), 500
 
 @app.route('/chat_history', methods=['GET'])
 def get_chat_history():
-    return jsonify({"history": chat_history_data, "success": True}), 200
+    return jsonify({"success": True, "history": chat_history_data}), 200
 
 @app.route('/clear_chat_history', methods=['POST'])
 def clear_chat_history():
     global chat_history_data
     chat_history_data = []
     save_chat_history()
-    return jsonify({"message": "Chat history cleared", "success": True}), 200
+    return jsonify({"success": True, "message": "Chat history cleared"}), 200
 
 @app.route('/llm_settings', methods=['GET'])
 def get_llm_settings_api():
     return jsonify({
+        "success": True,
         "model": LLM_MODEL,
         "temperature": LLM_TEMPERATURE,
         "top_k": LLM_TOP_K,
-        "top_p": LLM_TOP_P,
-        "success": True
+        "top_p": LLM_TOP_P
     }), 200
 
 @app.route('/llm_settings', methods=['POST'])
@@ -453,11 +467,11 @@ def update_llm_settings_api():
     new_top_p = float(data.get('top_p', LLM_TOP_P))
 
     if not (0 <= new_temperature <= 2):
-        return jsonify({"error": "Temperature must be between 0 and 2", "success": False}), 400
+        return jsonify({"success": False, "error": "Temperature must be between 0 and 2"}), 400
     if not (0 <= new_top_k <= 1000):
-        return jsonify({"error": "Top K must be between 0 and 1000", "success": False}), 400
+        return jsonify({"success": False, "error": "Top K must be between 0 and 1000"}), 400
     if not (0 <= new_top_p <= 1):
-        return jsonify({"error": "Top P must be between 0 and 1", "success": False}), 400
+        return jsonify({"success": False, "error": "Top P must be between 0 and 1"}), 400
 
     if (new_model != LLM_MODEL or
         new_temperature != LLM_TEMPERATURE or
@@ -481,20 +495,20 @@ def update_llm_settings_api():
             save_llm_settings()
             logger.info(f"LLM settings updated: Model={LLM_MODEL}, Temp={LLM_TEMPERATURE}, TopK={LLM_TOP_K}, TopP={LLM_TOP_P}")
             return jsonify({
+                "success": True,
                 "message": "LLM settings updated successfully",
                 "current_settings": {
                     "model": LLM_MODEL,
                     "temperature": LLM_TEMPERATURE,
                     "top_k": LLM_TOP_K,
                     "top_p": LLM_TOP_P
-                },
-                "success": True
+                }
             }), 200
         except Exception as e:
-            logger.error(f"Error re-initializing LLM with new settings: {e}")
-            return jsonify({"error": f"Failed to update LLM settings: {str(e)}. Ensure model is available.", "success": False}), 500
+            logger.exception(f"Error re-initializing LLM with new settings: {e}")
+            return jsonify({"success": False, "error": f"Failed to update LLM settings: {str(e)}. Ensure model is available."}), 500
     else:
-        return jsonify({"message": "No changes to LLM settings", "success": True}), 200
+        return jsonify({"success": True, "message": "No changes to LLM settings"}), 200
 
 @app.route('/ollama_models', methods=['GET'])
 def get_ollama_models():
@@ -505,13 +519,13 @@ def get_ollama_models():
         response.raise_for_status()
         models_data = response.json()
         model_names = [m['name'] for m in models_data.get('models', [])]
-        return jsonify({"models": model_names, "success": True}), 200
+        return jsonify({"success": True, "models": model_names}), 200
     except requests.exceptions.ConnectionError:
-        return jsonify({"error": "Could not connect to Ollama. Is it running?", "success": False}), 500
+        return jsonify({"success": False, "error": "Could not connect to Ollama. Is it running?"}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Error fetching Ollama models: {str(e)}", "success": False}), 500
+        return jsonify({"success": False, "error": f"Error fetching Ollama models: {str(e)}"}), 500
     except Exception as e:
-        return jsonify({"error": f"An unexpected error occurred: {str(e)}", "success": False}), 500
+        return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500
 
 # Run initialization when the app starts
 if __name__ == '__main__':
