@@ -1,0 +1,34 @@
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+.Python/
+venv/
+.venv/
+env/
+
+# Data directories (these will be created inside the container)
+data/
+
+# IDE specific files
+.vscode/
+.idea/
+*.iml
+
+# Git
+.git
+.gitignore
+
+# Build artifacts for frontend (if building frontend inside Docker, usually not recommended for multi-stage)
+build/
+dist/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Other common ignores
+*.log
+*.sqlite3
+.env
+.DS_Store
