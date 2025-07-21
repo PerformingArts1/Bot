@@ -1,373 +1,426 @@
 {\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red202\green202\blue202;\red23\green24\blue24;\red183\green111\blue247;
+\red212\green212\blue212;\red109\green115\blue120;\red113\green192\blue131;\red246\green124\blue48;\red70\green137\blue204;
+}
+{\*\expandedcolortbl;;\cssrgb\c83137\c83137\c83137;\cssrgb\c11765\c12157\c12549;\cssrgb\c77255\c54118\c97647;
+\cssrgb\c86275\c86275\c86275;\cssrgb\c50196\c52549\c54510;\cssrgb\c50588\c78824\c58431;\cssrgb\c98039\c56471\c24314;\cssrgb\c33725\c61176\c83922;
+}
 \margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\deftab720
+\pard\pardeftab720\partightenfactor0
 
-\f0\fs24 \cf0 # app.py - Conceptual Python Backend for AI Chatbot\
+\f0\fs28 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  flask \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  Flask\cf5 \strokec5 ,\cf2 \strokec2  request\cf5 \strokec5 ,\cf2 \strokec2  jsonify\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  flask_cors \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  CORS\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  dotenv \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  load_dotenv\cb1 \
+\cb3     \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  os\cb1 \
+\cb3     \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  tempfile\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  pypdf \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  PdfReader\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain.embeddings \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  GooglePalmEmbeddings\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain.vectorstores \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  FAISS\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain.text_splitter \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  RecursiveCharacterTextSplitter\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain.chains \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  ConversationalRetrievalChain\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain.memory \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  ConversationBufferMemory\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  langchain_google_genai \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  ChatGoogleGenerativeAI\cb1 \
+\cb3     \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  google.generativeai \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  genai\cb1 \
+\cb3     \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  uuid\cb1 \
+\cb3     \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  json\cb1 \
+\cb3     \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  datetime \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  datetime\cb1 \
 \
-from flask import Flask, request, jsonify\
-from flask_cors import CORS\
-import PyPDF2 # For PDF text extraction\
-# import fitz # PyMuPDF - for more advanced PDF parsing and image extraction\
-# import io\
-# from PIL import Image # For image processing\
-# import pytesseract # For Tesseract OCR\
-# import numpy as np # For numerical operations, e.g., vector similarity\
-# from transformers import AutoTokenizer, AutoModel # For embedding models (e.g., Sentence Transformers)\
-# from llama_cpp import Llama # For local LLM (llama.cpp)\
-# import chromadb # For vector database (example)\
-# from shapely.geometry import Point, LineString, Polygon # For geometric operations\
-# import ezdxf # For DXF CAD file parsing\
-# import os\
-# import base64\
-# import requests # If using Ollama via its API\
+\cb3     \cf6 \strokec6 # Load environment variables from .env file\cf2 \cb1 \strokec2 \
+\cb3     load_dotenv\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
 \
-app = Flask(__name__)\
-CORS(app) # Enable CORS for frontend communication\
+\cb3     app = Flask\cf5 \strokec5 (\cf4 \cb3 \strokec4 __name__\cf5 \cb3 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3     CORS\cf5 \strokec5 (\cf2 \strokec2 app\cf5 \strokec5 )\cf2 \strokec2  \cf6 \strokec6 # Enable CORS for all origins\cf2 \cb1 \strokec2 \
 \
-# --- 1. Configuration ---\
-# You'll need to configure paths to your local models and data\
-# For a real setup, download a model like 'all-MiniLM-L6-v2' for embeddings\
-# and a GGUF model for Llama.cpp (e.g., Llama-3-8B-Instruct.Q4_K_M.gguf)\
+\cb3     \cf6 \strokec6 # --- Configuration ---\cf2 \cb1 \strokec2 \
+\cb3     \cf6 \strokec6 # Retrieve API keys from environment variables\cf2 \cb1 \strokec2 \
+\cb3     GOOGLE_API_KEY = os.getenv\cf5 \strokec5 (\cf7 \strokec7 "GOOGLE_API_KEY"\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3     PRIMARY_BACKEND_API_KEY = os.getenv\cf5 \strokec5 (\cf7 \strokec7 "PRIMARY_BACKEND_API_KEY"\cf5 \strokec5 )\cf2 \strokec2  \cf6 \strokec6 # This is the key the frontend will use\cf2 \cb1 \strokec2 \
 \
-# Placeholder for local LLM (replace with actual Llama.cpp/Ollama integration)\
-# LLM_MODEL_PATH = "./models/llama-3-8b-instruct.Q4_K_M.gguf"\
-# llm = Llama(model_path=LLM_MODEL_PATH, n_ctx=4096, n_gpu_layers=-1, verbose=False) # n_gpu_layers=-1 to offload all layers to GPU (MPS)\
+\cb3     \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  GOOGLE_API_KEY\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 raise\cf2 \cb3 \strokec2  ValueError\cf5 \strokec5 (\cf7 \strokec7 "GOOGLE_API_KEY environment variable not set."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  PRIMARY_BACKEND_API_KEY\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 raise\cf2 \cb3 \strokec2  ValueError\cf5 \strokec5 (\cf7 \strokec7 "PRIMARY_BACKEND_API_KEY environment variable not set."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-# Placeholder for embedding model\
-# tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")\
-# model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")\
+\cb3     genai.configure\cf5 \strokec5 (\cf2 \strokec2 api_key=GOOGLE_API_KEY\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-# Placeholder for vector database (in-memory for this demo)\
-# In a real app, you'd initialize ChromaDB, FAISS, etc.\
-# client = chromadb.Client()\
-# collection = client.get_or_create_collection(name="artscenter_knowledge_base")\
+\cb3     \cf6 \strokec6 # In-memory storage for document chunks and metadata (for demonstration purposes)\cf2 \cb1 \strokec2 \
+\cb3     \cf6 \strokec6 # In a production system, this would be a persistent database/vector store\cf2 \cb1 \strokec2 \
+\cb3     document_store = \cf5 \strokec5 \{\}\cf2 \strokec2  \cf6 \strokec6 # \{doc_id: \{"filename": str, "chunks": List[str], "upload_timestamp": str\}\}\cf2 \cb1 \strokec2 \
+\cb3     vector_store = \cf4 \cb3 \strokec4 None\cf2 \cb3 \strokec2  \cf6 \strokec6 # FAISS vector store instance\cf2 \cb1 \strokec2 \
+\cb3     conversation_chain = \cf4 \cb3 \strokec4 None\cf2 \cb3 \strokec2  \cf6 \strokec6 # Langchain conversation chain instance\cf2 \cb1 \strokec2 \
+\cb3     memory = ConversationBufferMemory\cf5 \strokec5 (\cf2 \strokec2 memory_key=\cf7 \strokec7 "chat_history"\cf5 \strokec5 ,\cf2 \strokec2  return_messages=\cf4 \cb3 \strokec4 True\cf5 \cb3 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-# Simplified in-memory "vector database" for demonstration\
-knowledge_base = [] # Stores \{'text': 'chunk', 'embedding': [0.1, 0.2, ...], 'source': 'filename', 'page': 'page_num'\}\
+\cb3     \cf6 \strokec6 # Default RAG parameters (can be updated via admin API)\cf2 \cb1 \strokec2 \
+\cb3     rag_parameters = \cf5 \strokec5 \{\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 "chunk_size"\cf5 \strokec5 :\cf2 \strokec2  \cf8 \cb3 \strokec8 1000\cf5 \cb3 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 "chunk_overlap"\cf5 \strokec5 :\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf5 \cb3 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 "retrieval_k"\cf5 \strokec5 :\cf2 \strokec2  \cf8 \cb3 \strokec8 4\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf6 \strokec6 # Number of documents to retrieve initially\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 "cross_encoder_top_n"\cf5 \strokec5 :\cf2 \strokec2  \cf8 \cb3 \strokec8 3\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf6 \strokec6 # Number of top documents after cross-encoder reranking\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 "llm_temperature"\cf5 \strokec5 :\cf2 \strokec2  \cf8 \cb3 \strokec8 0.7\cf2 \cb3 \strokec2  \cf6 \strokec6 # Temperature for the LLM\cf2 \cb1 \strokec2 \
+\cb3     \cf5 \strokec5 \}\cf2 \cb1 \strokec2 \
 \
-# --- 2. Document Processing Functions ---\
+\cb3     \cf6 \strokec6 # --- Helper Functions ---\cf2 \cb1 \strokec2 \
 \
-def extract_text_from_pdf(pdf_path):\
-    """\
-    Extracts text from a PDF file, including conceptual OCR for images within.\
-    Returns a list of (page_num, text_content) tuples.\
-    """\
-    extracted_pages_data = []\
-    try:\
-        # doc = fitz.open(pdf_path) # Using PyMuPDF for robust PDF handling\
-        # for page_num in range(doc.page_count):\
-        #     page = doc.load_page(page_num)\
-        #     page_text = page.get_text() # Extract text directly\
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  get_pdf_text\cf5 \strokec5 (\cf2 \strokec2 pdf_docs\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Extracts text from a list of PDF documents."""\cf2 \cb1 \strokec2 \
+\cb3         text = \cf7 \strokec7 ""\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  pdf \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  pdf_docs\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             pdf_reader = PdfReader\cf5 \strokec5 (\cf2 \strokec2 pdf\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  page \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  pdf_reader.pages\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 text += page.extract_text\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  text\cb1 \
 \
-        #     # --- Conceptual Advanced Computer Vision (CV) for Image Data ---\
-        #     # This section would involve:\
-        #     # 1. Extracting images from the PDF page.\
-        #     # 2. Applying OCR to any text found within these images (e.g., labels, dimensions).\
-        #     # 3. Using object detection/semantic segmentation to identify elements (e.g., TVs, conduits, walls).\
-        #     # 4. Potentially converting vector graphics (if PDF is vector-based) into structured data.\
-        #     # 5. Generating textual descriptions of the visual content.\
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  get_text_chunks\cf5 \strokec5 (\cf2 \strokec2 text\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Splits text into chunks based on configured parameters."""\cf2 \cb1 \strokec2 \
+\cb3         text_splitter = RecursiveCharacterTextSplitter\cf5 \strokec5 (\cf2 \cb1 \strokec2 \
+\cb3             chunk_size=rag_parameters\cf5 \strokec5 [\cf7 \strokec7 "chunk_size"\cf5 \strokec5 ],\cf2 \cb1 \strokec2 \
+\cb3             chunk_overlap=rag_parameters\cf5 \strokec5 [\cf7 \strokec7 "chunk_overlap"\cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
+\cb3         \cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         chunks = text_splitter.split_text\cf5 \strokec5 (\cf2 \strokec2 text\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  chunks\cb1 \
 \
-        #     # pix = page.get_pixmap()\
-        #     # img_bytes = pix.tobytes("png")\
-        #     # img = Image.open(io.BytesIO(img_bytes))\
-        #     # ocr_text = pytesseract.image_to_string(img) # Requires Tesseract\
-        #     # page_text += f"\\n[OCR Content from Image: \{ocr_text\}]"\
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  get_vector_store\cf5 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Creates or updates a FAISS vector store from text chunks."""\cf2 \cb1 \strokec2 \
+\cb3         embeddings = GooglePalmEmbeddings\cf5 \strokec5 (\cf2 \strokec2 google_api_key=GOOGLE_API_KEY\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # If vector_store already exists, we can add more documents to it\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # For simplicity, this example recreates it. In a real app, you'd use .add_texts()\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  vector_store\cb1 \
+\cb3         vector_store = FAISS.from_texts\cf5 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 ,\cf2 \strokec2  embedding=embeddings\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  vector_store\cb1 \
 \
-        #     # Conceptual diagram analysis for spatial structure (using PyTorch/OpenCV)\
-        #     # detected_objects = process_diagram_for_objects(img) # Function to call CV models\
-        #     # page_text += f"\\n[Diagram Analysis: Detected objects: \{detected_objects\}]"\
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  get_conversation_chain\cf5 \strokec5 (\cf2 \strokec2 vectorstore\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Initializes a conversational RAG chain."""\cf2 \cb1 \strokec2 \
+\cb3         llm = ChatGoogleGenerativeAI\cf5 \strokec5 (\cf2 \strokec2 model=\cf7 \strokec7 "gemini-pro"\cf5 \strokec5 ,\cf2 \strokec2  temperature=rag_parameters\cf5 \strokec5 [\cf7 \strokec7 "llm_temperature"\cf5 \strokec5 ],\cf2 \strokec2  google_api_key=GOOGLE_API_KEY\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cb1 \
+\cb3         \cf6 \strokec6 # Configure retriever with k and reranker\cf2 \cb1 \strokec2 \
+\cb3         retriever = vectorstore.as_retriever\cf5 \strokec5 (\cf2 \strokec2 search_kwargs=\cf5 \strokec5 \{\cf7 \strokec7 "k"\cf5 \strokec5 :\cf2 \strokec2  rag_parameters\cf5 \strokec5 [\cf7 \strokec7 "retrieval_k"\cf5 \strokec5 ]\})\cf2 \cb1 \strokec2 \
+\cb3         \cb1 \
+\cb3         \cf6 \strokec6 # Note: Cross-encoder reranking is typically done with a separate model (e.g., Sentence-Transformers cross-encoder).\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # Langchain doesn't have a direct built-in cross-encoder for Google Palm Embeddings.\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # For a full implementation, you'd integrate a separate reranking step here.\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # For this example, we'll simulate it by simply taking top_n from the initial retrieval if cross_encoder_top_n is less than retrieval_k.\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # In a real scenario, you'd pass the retrieved documents through a cross-encoder model\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # and then select the top_n based on their scores.\cf2 \cb1 \strokec2 \
+\cb3         \cb1 \
+\cb3         \cf6 \strokec6 # This is a simplified representation. A true cross-encoder integration\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # would involve a custom retriever or a transformation step.\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 class\cf2 \cb3 \strokec2  CustomRetriever\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 __init__\cf5 \cb3 \strokec5 (\cf4 \cb3 \strokec4 self\cf5 \cb3 \strokec5 ,\cf2 \strokec2  base_retriever\cf5 \strokec5 ,\cf2 \strokec2  top_n\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 self\cf2 \cb3 \strokec2 .base_retriever = base_retriever\cb1 \
+\cb3                 \cf4 \cb3 \strokec4 self\cf2 \cb3 \strokec2 .top_n = top_n\cb1 \
 \
-        #     extracted_pages_data.append((page_num + 1, page_text)) # +1 for 1-based page numbers\
+\cb3             \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  get_relevant_documents\cf5 \strokec5 (\cf4 \cb3 \strokec4 self\cf5 \cb3 \strokec5 ,\cf2 \strokec2  query\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3                 docs = \cf4 \cb3 \strokec4 self\cf2 \cb3 \strokec2 .base_retriever.get_relevant_documents\cf5 \strokec5 (\cf2 \strokec2 query\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 \cf6 \strokec6 # Simulate reranking by simply taking the top_n from the initial retrieval\cf2 \cb1 \strokec2 \
+\cb3                 \cf6 \strokec6 # In a real application, a cross-encoder would re-score these documents.\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  docs\cf5 \strokec5 [:\cf4 \cb3 \strokec4 self\cf2 \cb3 \strokec2 .top_n\cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
 \
-        # Using PyPDF2 for basic text extraction for demo purposes\
-        with open(pdf_path, 'rb') as file:\
-            reader = PyPDF2.PdfReader(file)\
-            for page_num in range(len(reader.pages)):\
-                page = reader.pages[page_num]\
-                page_text = page.extract_text() or ""\
-                extracted_pages_data.append((page_num + 1, page_text))\
+\cb3         custom_retriever = CustomRetriever\cf5 \strokec5 (\cf2 \strokec2 retriever\cf5 \strokec5 ,\cf2 \strokec2  rag_parameters\cf5 \strokec5 [\cf7 \strokec7 "cross_encoder_top_n"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
 \
-    except Exception as e:\
-        print(f"Error extracting text from PDF \{pdf_path\}: \{e\}")\
-    return extracted_pages_data\
+\cb3         \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  conversation_chain\cb1 \
+\cb3         conversation_chain = ConversationalRetrievalChain.from_llm\cf5 \strokec5 (\cf2 \cb1 \strokec2 \
+\cb3             llm=llm\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3             retriever=custom_retriever\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3             memory=memory\cb1 \
+\cb3         \cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  conversation_chain\cb1 \
 \
-def chunk_text(text, chunk_size=500, overlap=50):\
-    """Splits text into smaller chunks with overlap."""\
-    chunks = []\
-    words = text.split()\
-    i = 0\
-    while i < len(words):\
-        chunk = " ".join(words[i:i + chunk_size])\
-        chunks.append(chunk)\
-        i += chunk_size - overlap\
-    return chunks\
+\cb3     \cf6 \strokec6 # --- Middleware for API Key Authentication ---\cf2 \cb1 \strokec2 \
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .before_request\cb1 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  authenticate_request\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # Allow health check without authentication\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  request.path == \cf7 \strokec7 '/health'\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb1 \strokec2 \
 \
-# --- 3. Embedding Generation (Conceptual) ---\
+\cb3         auth_header = request.headers.get\cf5 \strokec5 (\cf7 \strokec7 'Authorization'\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  auth_header\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Authorization header missing"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 401\cf2 \cb1 \strokec2 \
 \
-def get_embedding(text):\
-    """\
-    Generates a conceptual embedding for a given text.\
-    In a real system, this would use a pre-trained embedding model (e.g., Sentence Transformers).\
-    """\
-    # Example using a placeholder for actual embedding model\
-    # inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)\
-    # with torch.no_grad():\
-    #     embeddings = model(**inputs).last_hidden_state.mean(dim=1).squeeze().tolist()\
-    # return embeddings\
-    # For demo, return a simple hash or mock vector\
-    return [hash(text) % 1000 / 1000.0] * 384 # Mock 384-dim vector (e.g., for all-MiniLM-L6-v2)\
+\cb3         \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             scheme\cf5 \strokec5 ,\cf2 \strokec2  token = auth_header.split\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  scheme.lower\cf5 \strokec5 ()\cf2 \strokec2  != \cf7 \strokec7 'bearer'\cf2 \strokec2  \cf4 \cb3 \strokec4 or\cf2 \cb3 \strokec2  token != PRIMARY_BACKEND_API_KEY\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Invalid or unauthorized token"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 403\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  ValueError\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Invalid Authorization header format"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 401\cf2 \cb1 \strokec2 \
 \
-# --- 4. RAG Logic ---\
+\cb3     \cf6 \strokec6 # --- API Endpoints ---\cf2 \cb1 \strokec2 \
 \
-def retrieve_relevant_chunks(query_embedding, top_k=3):\
-    """\
-    Retrieves the most relevant chunks from the knowledge base based on query embedding.\
-    In a real system, this would query the vector database using actual similarity metrics.\
-    """\
-    # In a real system, you'd calculate cosine similarity between query_embedding\
-    # (which would be a real vector from get_embedding) and all stored embeddings\
-    # in the knowledge_base (or vector DB).\
-    # For demonstration, we'll use simplified keyword matching on the raw query string.\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/health"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "GET"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  health_check\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Endpoint to check the health of the backend service."""\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "status"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "healthy"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Backend is running and accessible."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    query_lower = query_embedding.lower() # query_embedding is actually the raw query string for demo\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/upload-document"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "POST"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  upload_document\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7         Handles PDF document upload, text extraction, chunking, and vector store creation.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf7 \strokec7 'document'\cf2 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  request.files\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No document part in the request"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    relevant_chunks = []\
-    # Simplified keyword matching for demo purposes\
-    for item in knowledge_base:\
-        if any(keyword in item['text'].lower() for keyword in query_lower.split()):\
-            relevant_chunks.append(item['text'])\
-            if len(relevant_chunks) >= top_k:\
-                break\
+\cb3         \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2  = request.files\cf5 \strokec5 [\cf7 \strokec7 'document'\cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2 .filename == \cf7 \strokec7 ''\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No selected file"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    # Fallback to predefined chunks if no keyword match in demo knowledge_base\
-    if not relevant_chunks:\
-        if "power requirements" in query_lower:\
-            relevant_chunks = [\
-                "GENERAL NOTES: EACH TV LOCATION REQUIRES 20A 120VAC DUPLEX RECEPTACLE",\
-                "MOUNTING HEIGHT: RECEPTACLE HEIGHT 18 AFS., SWITCH HEIGHT - 48 AFF, TV HEIGHT 68AFF"\
-            ]\
-        elif "control room" in query_lower or "av-206" in query_lower:\
-            relevant_chunks = [\
-                "AV-206 CONTROL ROOM is located on the 3rd floor.",\
-                "Control Room: Central hub for audio, lighting, and stage management. Refer to AV231 for detailed device placements."\
-            ]\
-        elif "emergency" in query_lower:\
-            relevant_chunks = [\
-                "Emergency Exits & Procedures.pdf: Comprehensive guide for emergency evacuations and safety protocols.",\
-                "Fire Evacuation Protocol: Follow marked exit routes, proceed to assembly points, do not use elevators."\
-            ]\
-        elif "tv-321" in query_lower or "main hall" in query_lower:\
-            relevant_chunks = [\
-                "Device TV-321 is installed in the main hall.",\
-                "Main Hall: The primary performance space with tiered seating. Capacity: 850."\
-            ]\
-        elif "sp-310" in query_lower or "lobby" in query_lower:\
-             relevant_chunks = [\
-                "SP-310 and SP-311 are speakers in the lobby area.",\
-                "Lobby: Main entrance, ticket counter, and concession area."\
-            ]\
-        elif "dimensions" in query_lower or "layout" in query_lower or "floor plan" in query_lower or "conduit" in query_lower:\
-            # --- Conceptual Geospatial/CAD Processing Integration ---\
-            # This is where a specialized module would be called to interpret the drawing.\
-            # For example, if you had a structured representation of the CAD data:\
-            # spatial_data = parse_cad_data("path/to/your/AV231.dxf")\
-            # inferred_info = spatial_reasoning_module(query_lower, spatial_data)\
-            # relevant_chunks.append(f"Inferred spatial info: \{inferred_info\}")\
-            relevant_chunks = [\
-                "The AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf contains detailed layouts and dimensions for AV devices and conduit paths.",\
-                "While direct geometric interpretation is complex, the document specifies device locations like AV-206 (Control Room) and TV-321 (Main Hall), and details conduit sizes and runs.",\
-                "For precise measurements and spatial relationships, you would need to process the original CAD files (e.g., DXF) using libraries like `ezdxf` and `shapely`."\
-            ]\
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 and\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2 .filename.endswith\cf5 \strokec5 (\cf7 \strokec7 '.pdf'\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf6 \strokec6 # Save the uploaded PDF to a temporary file\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 with\cf2 \cb3 \strokec2  tempfile.NamedTemporaryFile\cf5 \strokec5 (\cf2 \strokec2 delete=\cf4 \cb3 \strokec4 False\cf5 \cb3 \strokec5 ,\cf2 \strokec2  suffix=\cf7 \strokec7 ".pdf"\cf5 \strokec5 )\cf2 \strokec2  \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  tmp_file\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2 .save\cf5 \strokec5 (\cf2 \strokec2 tmp_file.name\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                     tmp_file_path = tmp_file.name\cb1 \
 \
-    return relevant_chunks\
+\cb3                 raw_text = get_pdf_text\cf5 \strokec5 ([\cf2 \strokec2 tmp_file_path\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3                 text_chunks = get_text_chunks\cf5 \strokec5 (\cf2 \strokec2 raw_text\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-def generate_response_with_llm(query, context_chunks, image_description=None):\
-    """\
-    Generates a response using the local LLM, augmented with context.\
-    Includes conceptual handling for multimodal input.\
-    """\
-    context = "\\n".join(context_chunks)\
+\cb3                 \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  text_chunks\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No text extracted or chunks created from the document."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    # --- Conceptual Multimodal LLM Integration (for generation) ---\
-    # If a Vision LLM described the image, that description would be passed here\
-    # to help the main LLM generate a more informed response.\
-    image_context = f"\\nUser provided an image with content: \{image_description\}\\n" if image_description else ""\
+\cb3                 \cf6 \strokec6 # Update the global vector store\cf2 \cb1 \strokec2 \
+\cb3                 get_vector_store\cf5 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 \cb1 \
+\cb3                 doc_id = \cf4 \cb3 \strokec4 str\cf5 \cb3 \strokec5 (\cf2 \strokec2 uuid.uuid4\cf5 \strokec5 ())\cf2 \cb1 \strokec2 \
+\cb3                 document_store\cf5 \strokec5 [\cf2 \strokec2 doc_id\cf5 \strokec5 ]\cf2 \strokec2  = \cf5 \strokec5 \{\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "filename"\cf5 \strokec5 :\cf2 \strokec2  \cf4 \cb3 \strokec4 file\cf2 \cb3 \strokec2 .filename\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "chunks"\cf5 \strokec5 :\cf2 \strokec2  text_chunks\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "num_chunks"\cf5 \strokec5 :\cf2 \strokec2  \cf4 \cb3 \strokec4 len\cf5 \cb3 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 ),\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "upload_timestamp"\cf5 \strokec5 :\cf2 \strokec2  datetime.now\cf5 \strokec5 ()\cf2 \strokec2 .isoformat\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3                 \cf5 \strokec5 \}\cf2 \cb1 \strokec2 \
 \
-    prompt = f"""\
-    You are an AI assistant for a performing arts center. Use the following information\
-    to answer the user's question. If the information is not sufficient, state that.\
+\cb3                 \cf6 \strokec6 # Re-initialize conversation chain with the updated vector store\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  conversation_chain\cb1 \
+\cb3                 conversation_chain = get_conversation_chain\cf5 \strokec5 (\cf2 \strokec2 vector_store\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 memory.clear\cf5 \strokec5 ()\cf2 \strokec2  \cf6 \strokec6 # Clear chat memory when new documents are ingested\cf2 \cb1 \strokec2 \
 \
-    Context from documents:\{image_context\}\
-    \{context\}\
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Document '\cf2 \strokec2 \{file.filename\}\cf7 \strokec7 ' uploaded and ingested successfully!"\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "doc_id"\cf5 \strokec5 :\cf2 \strokec2  doc_id\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                     \cf7 \strokec7 "num_chunks"\cf5 \strokec5 :\cf2 \strokec2  \cf4 \cb3 \strokec4 len\cf5 \cb3 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 \cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    User Question: \{query\}\
+\cb3             \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  Exception \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  e\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 app.logger.error\cf5 \strokec5 (\cf7 \strokec7 f"Error processing document upload: \cf2 \strokec2 \{e\}\cf7 \strokec7 "\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Failed to process document: \cf2 \strokec2 \{str(e)\}\cf7 \strokec7 "\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 finally\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf6 \strokec6 # Clean up the temporary file\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf7 \strokec7 'tmp_file_path'\cf2 \strokec2  \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 locals\cf5 \cb3 \strokec5 ()\cf2 \strokec2  \cf4 \cb3 \strokec4 and\cf2 \cb3 \strokec2  os.path.exists\cf5 \strokec5 (\cf2 \strokec2 tmp_file_path\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3                     os.remove\cf5 \strokec5 (\cf2 \strokec2 tmp_file_path\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 else\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Invalid file type. Only PDF files are allowed."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    AI Assistant:\
-    """\
-    print(f"Sending prompt to LLM:\\n\{prompt\}")\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/ingest"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "POST"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  ingest_default_document\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7         Triggers ingestion of a default, pre-defined document for demonstration.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3         default_pdf_path = os.path.join\cf5 \strokec5 (\cf2 \strokec2 app.root_path\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "AV201_ DEVICE LOCATIONS BASEMENT FLOOR PLAN Rev.4 markup (2).pdf"\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cb1 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  os.path.exists\cf5 \strokec5 (\cf2 \strokec2 default_pdf_path\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # Attempt to create a dummy PDF if it doesn't exist for testing purposes\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  reportlab.pdfgen \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  canvas\cb1 \
+\cb3                 \cf4 \cb3 \strokec4 from\cf2 \cb3 \strokec2  reportlab.lib.pagesizes \cf4 \cb3 \strokec4 import\cf2 \cb3 \strokec2  letter\cb1 \
+\cb3                 c = canvas.Canvas\cf5 \strokec5 (\cf2 \strokec2 default_pdf_path\cf5 \strokec5 ,\cf2 \strokec2  pagesize=letter\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 c.drawString\cf5 \strokec5 (\cf8 \cb3 \strokec8 100\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf8 \cb3 \strokec8 750\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "This is a dummy PDF document for testing RAG ingestion."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 c.drawString\cf5 \strokec5 (\cf8 \cb3 \strokec8 100\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf8 \cb3 \strokec8 730\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "It contains some sample text about a device location."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 c.drawString\cf5 \strokec5 (\cf8 \cb3 \strokec8 100\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf8 \cb3 \strokec8 710\cf5 \cb3 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "The basement floor plan shows various devices."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 c.save\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3                 app.logger.warning\cf5 \strokec5 (\cf7 \strokec7 f"Dummy PDF created at: \cf2 \strokec2 \{default_pdf_path\}\cf7 \strokec7 "\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  ImportError\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Default PDF not found and ReportLab not installed to create a dummy. Please provide the default PDF."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  Exception \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  e\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Default PDF not found and failed to create dummy: \cf2 \strokec2 \{str(e)\}\cf7 \strokec7 "\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
 \
-    # Placeholder for actual LLM inference using llama-cpp-python or Ollama\
-    # If using llama-cpp-python with a multimodal GGUF model (e.g., LLaVA):\
-    # You would pass the image data directly to the LLM call along with the text prompt.\
-    # The exact API varies by model/wrapper.\
-    # output = llm(\
-    #     prompt,\
-    #     max_tokens=1024,\
-    #     stop=["User:", "\\n"], # Adjust stop tokens based on model\
-    #     echo=False,\
-    #     temperature=0.7,\
-    #     # images=[image_data_bytes] # If your LLM supports direct image input\
-    # )\
-    # return output["choices"][0]["text"].strip()\
+\cb3         \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             raw_text = get_pdf_text\cf5 \strokec5 ([\cf2 \strokec2 default_pdf_path\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3             text_chunks = get_text_chunks\cf5 \strokec5 (\cf2 \strokec2 raw_text\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-    # If using Ollama (via requests to local Ollama server):\
-    # payload = \{"model": "llava", "prompt": prompt\}\
-    # if image_description: # If image was provided, include it for Ollama\
-    #     payload["images"] = [base64_image_data_from_frontend] # You'd need to pass this through\
-    # response = requests.post("http://localhost:11434/api/generate", json=payload)\
-    # result = response.json()\
-    # return result['response']\
+\cb3             \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  text_chunks\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No text extracted or chunks created from the default document."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
 \
+\cb3             get_vector_store\cf5 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cb1 \
+\cb3             doc_id = \cf4 \cb3 \strokec4 str\cf5 \cb3 \strokec5 (\cf2 \strokec2 uuid.uuid4\cf5 \strokec5 ())\cf2 \cb1 \strokec2 \
+\cb3             document_store\cf5 \strokec5 [\cf2 \strokec2 doc_id\cf5 \strokec5 ]\cf2 \strokec2  = \cf5 \strokec5 \{\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "filename"\cf5 \strokec5 :\cf2 \strokec2  os.path.basename\cf5 \strokec5 (\cf2 \strokec2 default_pdf_path\cf5 \strokec5 ),\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "chunks"\cf5 \strokec5 :\cf2 \strokec2  text_chunks\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "num_chunks"\cf5 \strokec5 :\cf2 \strokec2  \cf4 \cb3 \strokec4 len\cf5 \cb3 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 ),\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "upload_timestamp"\cf5 \strokec5 :\cf2 \strokec2  datetime.now\cf5 \strokec5 ()\cf2 \strokec2 .isoformat\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \}\cf2 \cb1 \strokec2 \
 \
-    # Simulated LLM response for demonstration\
-    if not context_chunks and not image_description:\
-        return "I don't have specific information on that topic in my knowledge base. Could you please provide more details or ask about something else?"\
-    else:\
-        response_prefix = "Based on the documents"\
-        if image_description:\
-            response_prefix += f" and the image you provided (conceptually processed)"\
-        return f"\{response_prefix\}, regarding '\{query\}', I found: \{context\}. How else can I help?"\
+\cb3             \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  conversation_chain\cb1 \
+\cb3             conversation_chain = get_conversation_chain\cf5 \strokec5 (\cf2 \strokec2 vector_store\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             memory.clear\cf5 \strokec5 ()\cf2 \strokec2  \cf6 \strokec6 # Clear chat memory when new documents are ingested\cf2 \cb1 \strokec2 \
 \
-# --- 5. API Endpoints ---\
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Default document '\cf2 \strokec2 \{os.path.basename(default_pdf_path)\}\cf7 \strokec7 ' ingested successfully!"\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "doc_id"\cf5 \strokec5 :\cf2 \strokec2  doc_id\cf5 \strokec5 ,\cf2 \cb1 \strokec2 \
+\cb3                 \cf7 \strokec7 "num_chunks"\cf5 \strokec5 :\cf2 \strokec2  \cf4 \cb3 \strokec4 len\cf5 \cb3 \strokec5 (\cf2 \strokec2 text_chunks\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-@app.route('/ingest_document', methods=['POST'])\
-def ingest_document():\
-    """\
-    Endpoint to ingest a new PDF document into the knowledge base.\
-    In a real system, this would process the file, chunk it, embed it, and store in DB.\
-    """\
-    if 'file' not in request.files:\
-        return jsonify(\{"error": "No file part"\}), 400\
-    file = request.files['file']\
-    if file.filename == '':\
-        return jsonify(\{"error": "No selected file"\}), 400\
-    if file and file.filename.endswith('.pdf'):\
-        # Save the file temporarily\
-        filepath = os.path.join("/tmp", file.filename) # Use a temporary path\
-        file.save(filepath)\
+\cb3         \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  Exception \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  e\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             app.logger.error\cf5 \strokec5 (\cf7 \strokec7 f"Error ingesting default document: \cf2 \strokec2 \{e\}\cf7 \strokec7 "\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Failed to ingest default document: \cf2 \strokec2 \{str(e)\}\cf7 \strokec7 "\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
 \
-        # Process the PDF, including conceptual image/diagram analysis\
-        pages_data = extract_text_from_pdf(filepath)\
-        total_chunks_added = 0\
-        for page_num, page_text in pages_data:\
-            chunks = chunk_text(page_text)\
-            for chunk in chunks:\
-                embedding = get_embedding(chunk)\
-                knowledge_base.append(\{'text': chunk, 'embedding': embedding, 'source': file.filename, 'page': page_num\})\
-                # In a real system: collection.add(documents=[chunk], embeddings=[embedding], metadatas=[\{'source': file.filename, 'page': page_num\}])\
-                total_chunks_added += 1\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/ask"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "POST"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  ask_question\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7         Receives a user query and returns a RAG-generated response.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3         data = request.get_json\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3         user_query = data.get\cf5 \strokec5 (\cf7 \strokec7 "query"\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         chat_history_data = data.get\cf5 \strokec5 (\cf7 \strokec7 "chatHistory"\cf5 \strokec5 ,\cf2 \strokec2  \cf5 \strokec5 [])\cf2 \strokec2  \cf6 \strokec6 # Expects [\{role: 'user', content: '...'\}, \{role: 'bot', content: '...'\}]\cf2 \cb1 \strokec2 \
 \
-        os.remove(filepath) # Clean up temp file\
-        return jsonify(\{"message": f"Document '\{file.filename\}' ingested successfully. \{total_chunks_added\} chunks added."\}), 200\
-    return jsonify(\{"error": "Invalid file type. Only PDFs are supported for ingestion."\}), 400\
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  user_query\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No query provided"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-@app.route('/chat', methods=['POST'])\
-def chat():\
-    """\
-    Endpoint for AI chatbot interaction.\
-    Handles text queries and conceptual image queries.\
-    """\
-    data = request.json\
-    user_query = data.get('query', '')\
-    image_data_b64 = data.get('image', None) # Base64 image data from frontend\
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  vector_store \cf4 \cb3 \strokec4 or\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  conversation_chain\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No documents ingested yet. Please upload a document first."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    image_description = None\
-    if image_data_b64:\
-        # --- Conceptual Multimodal Query Fusion (Image Understanding) ---\
-        # 1. Decode base64 image\
-        # image_bytes = base64.b64decode(image_data_b64)\
-        # 2. Use a Vision LLM (e.g., LLaVA via llama-cpp-python or Ollama) or specialized CV model\
-        #    to describe the image content. This description is then used to augment the user's text query.\
-        # Example:\
-        # If using llama-cpp-python with a multimodal model:\
-        # vision_llm_output = llm.generate_image_description(image_bytes) # Conceptual API\
-        # image_description = vision_llm_output.get('description', 'an unspecified diagram or image')\
-        #\
-        # If using Ollama:\
-        # ollama_payload = \{"model": "llava", "prompt": "Describe this image.", "images": [image_data_b64]\}\
-        # ollama_response = requests.post("http://localhost:11434/api/generate", json=ollama_payload)\
-        # ollama_result = ollama_response.json()\
-        # image_description = ollama_result.get('response', 'an unspecified diagram or image')\
+\cb3         \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # Reconstruct memory from chat_history_data\cf2 \cb1 \strokec2 \
+\cb3             memory.clear\cf5 \strokec5 ()\cf2 \strokec2  \cf6 \strokec6 # Clear current memory\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  msg \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  chat_history_data\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  msg\cf5 \strokec5 [\cf7 \strokec7 'role'\cf5 \strokec5 ]\cf2 \strokec2  == \cf7 \strokec7 'user'\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     memory.chat_memory.add_user_message\cf5 \strokec5 (\cf2 \strokec2 msg\cf5 \strokec5 [\cf7 \strokec7 'content'\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 elif\cf2 \cb3 \strokec2  msg\cf5 \strokec5 [\cf7 \strokec7 'role'\cf5 \strokec5 ]\cf2 \strokec2  == \cf7 \strokec7 'bot'\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     memory.chat_memory.add_ai_message\cf5 \strokec5 (\cf2 \strokec2 msg\cf5 \strokec5 [\cf7 \strokec7 'content'\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
 \
-        print("Received image data. Conceptual image processing for multimodal query fusion would happen here.")\
-        image_description = "a technical diagram or floor plan" # Simulated description for demo\
-        # user_query = f"\{user_query\} (User provided an image, conceptually processed as: \{image_description\})"\
-        # For simplicity in demo, we'll just pass image_description to generate_response_with_llm\
+\cb3             \cf6 \strokec6 # Invoke the conversation chain\cf2 \cb1 \strokec2 \
+\cb3             result = conversation_chain.invoke\cf5 \strokec5 (\{\cf7 \strokec7 "question"\cf5 \strokec5 :\cf2 \strokec2  user_query\cf5 \strokec5 \})\cf2 \cb1 \strokec2 \
+\cb3             \cb1 \
+\cb3             bot_response = result.get\cf5 \strokec5 (\cf7 \strokec7 "answer"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "No answer found."\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cb1 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "response"\cf5 \strokec5 :\cf2 \strokec2  bot_response\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    if not user_query and not image_data_b64: # After potential image processing, ensure there's a query\
-        return jsonify(\{"error": "No query provided after image processing"\}), 400\
+\cb3         \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  Exception \cf4 \cb3 \strokec4 as\cf2 \cb3 \strokec2  e\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             app.logger.error\cf5 \strokec5 (\cf7 \strokec7 f"Error during RAG query: \cf2 \strokec2 \{e\}\cf7 \strokec7 "\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Failed to get RAG response: \cf2 \strokec2 \{str(e)\}\cf7 \strokec7 "\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 500\cf2 \cb1 \strokec2 \
 \
-    # 1. Get embedding for the user query (now potentially augmented by image description)\
-    # In a real system, query_embedding would be a vector from get_embedding(user_query + image_description)\
-    query_embedding = user_query # Still using raw query string for simplified demo retrieval\
+\cb3     \cf6 \strokec6 # --- Admin Endpoints ---\cf2 \cb1 \strokec2 \
 \
-    # 2. Retrieve relevant context chunks\
-    # This step would leverage the embedding model and vector DB for actual similarity search.\
-    relevant_chunks = retrieve_relevant_chunks(query_embedding)\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/admin/users"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "GET"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  admin_get_users\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7         Admin endpoint to list all users (mock data for now).\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         In a real app, this would query Firebase Auth or your user management system.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3         \cf6 \strokec6 # This is mock data. In a real application, you would integrate with Firebase Admin SDK\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # to list users from Firebase Authentication.\cf2 \cb1 \strokec2 \
+\cb3         mock_users = \cf5 \strokec5 [\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \{\cf7 \strokec7 "uid"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "user123"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "email"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "user1@example.com"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "displayName"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Alice"\cf5 \strokec5 \},\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \{\cf7 \strokec7 "uid"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "user456"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "email"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "user2@example.com"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "displayName"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Bob"\cf5 \strokec5 \},\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \{\cf7 \strokec7 "uid"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "YOUR_ADMIN_UID_HERE"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "email"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "admin@example.com"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "displayName"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Admin User"\cf5 \strokec5 \}\cf2 \strokec2  \cf6 \strokec6 # IMPORTANT: Match this UID\cf2 \cb1 \strokec2 \
+\cb3         \cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "users"\cf5 \strokec5 :\cf2 \strokec2  mock_users\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    # 3. Generate response using LLM with context (and image description if present)\
-    ai_response = generate_response_with_llm(user_query, relevant_chunks, image_description)\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/admin/documents"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "GET"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  admin_get_documents\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Admin endpoint to list all ingested documents."""\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # Convert document_store dictionary to a list of documents\cf2 \cb1 \strokec2 \
+\cb3         documents_list = \cf5 \strokec5 [\cf2 \cb1 \strokec2 \
+\cb3             \cf5 \strokec5 \{\cf7 \strokec7 "id"\cf5 \strokec5 :\cf2 \strokec2  doc_id\cf5 \strokec5 ,\cf2 \strokec2  **data\cf5 \strokec5 \}\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  doc_id\cf5 \strokec5 ,\cf2 \strokec2  data \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  document_store.items\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3         \cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "documents"\cf5 \strokec5 :\cf2 \strokec2  documents_list\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    return jsonify(\{"response": ai_response\}), 200\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/admin/document/<doc_id>"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "DELETE"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  admin_delete_document\cf5 \strokec5 (\cf2 \strokec2 doc_id\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Admin endpoint to delete an ingested document and its data."""\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  doc_id \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  document_store\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 del\cf2 \cb3 \strokec2  document_store\cf5 \strokec5 [\cf2 \strokec2 doc_id\cf5 \strokec5 ]\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # In a real system, you'd also remove chunks from the vector store\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # For FAISS, this would typically involve rebuilding the index or\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # using a vector store that supports direct deletion of vectors.\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # For simplicity, we just remove it from our in-memory store.\cf2 \cb1 \strokec2 \
+\cb3             \cb1 \
+\cb3             \cf6 \strokec6 # Re-initialize vector store and conversation chain if needed\cf2 \cb1 \strokec2 \
+\cb3             \cf6 \strokec6 # (This is a simplistic approach; a robust solution would manage vector store updates)\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  vector_store\cf5 \strokec5 ,\cf2 \strokec2  conversation_chain\cb1 \
+\cb3             vector_store = \cf4 \cb3 \strokec4 None\cf2 \cb3 \strokec2  \cf6 \strokec6 # Reset vector store\cf2 \cb1 \strokec2 \
+\cb3             conversation_chain = \cf4 \cb3 \strokec4 None\cf2 \cb3 \strokec2  \cf6 \strokec6 # Reset conversation chain\cf2 \cb1 \strokec2 \
+\cb3             memory.clear\cf5 \strokec5 ()\cf2 \strokec2  \cf6 \strokec6 # Clear memory\cf2 \cb1 \strokec2 \
+\cb3             \cb1 \
+\cb3             \cf6 \strokec6 # If there are other documents, rebuild the vector store from them\cf2 \cb1 \strokec2 \
+\cb3             all_chunks = \cf5 \strokec5 []\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  doc_data \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  document_store.values\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3                 all_chunks.extend\cf5 \strokec5 (\cf2 \strokec2 doc_data\cf5 \strokec5 [\cf7 \strokec7 "chunks"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  all_chunks\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 get_vector_store\cf5 \strokec5 (\cf2 \strokec2 all_chunks\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                 conversation_chain = get_conversation_chain\cf5 \strokec5 (\cf2 \strokec2 vector_store\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
 \
-@app.route('/emergency_protocols', methods=['GET'])\
-def get_emergency_protocols():\
-    """\
-    Endpoint to retrieve emergency protocols.\
-    In a real system, these would also be managed via RAG or a structured DB.\
-    """\
-    protocols = [\
-        \{"title": "Fire Evacuation", "content": "Follow marked exit routes, proceed to assembly points, do not use elevators."\},\
-        \{"title": "Medical Emergency", "content": "Call 911, notify nearest staff, provide first aid if trained, secure area."\},\
-        \{"title": "Power Outage", "content": "Remain calm, wait for instructions, emergency lighting will activate."\},\
-        \{"title": "Security Threat", "content": "Run, Hide, Fight. Follow instructions from security personnel or law enforcement."\},\
-    ]\
-    return jsonify(\{"protocols": protocols\}), 200\
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Document '\cf2 \strokec2 \{doc_id\}\cf7 \strokec7 ' deleted successfully."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 else\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "Document not found."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 404\cf2 \cb1 \strokec2 \
 \
-if __name__ == '__main__':\
-    # For demonstration, let's ingest a conceptual PDF content\
-    # In a real scenario, you'd have a separate script or admin interface for ingestion\
-    conceptual_pdf_content = """\
-    AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf\
-    GENERAL NOTES: EACH TV LOCATION REQUIRES 20A 120VAC DUPLEX RECEPTACLE.\
-    CONTROL ROOM (AV-206) is located on the 3rd floor.\
-    MOUNTING HEIGHT: RECEPTACLE HEIGHT 18 AFS., SWITCH HEIGHT - 48 AFF, TV HEIGHT 68AFF.\
-    Refer to AV-300 and AV-900 sheets for DISPLAY ELEVATIONS AND MOUNTING DETAILS.\
-    Device TV-321 is installed in the main hall.\
-    SP-310 and SP-311 are speakers in the lobby area.\
-    Emergency exits are clearly marked on all floor plans.\
-    The drawing also contains detailed conduit paths and dimensions for cabling.\
-    There are multiple junction boxes (e.g., 12x12x4, 16x16x6) indicated for various connections.\
-    """\
-    print("Ingesting conceptual PDF content into knowledge base...")\
-    # Simulate processing of a multi-page PDF with some visual info\
-    conceptual_pages = [\
-        (1, "Page 1: " + conceptual_pdf_content),\
-        (2, "Page 2: This page shows the detailed conduit paths and specific device connections for AV-206 (Control Room) and TV-321. It includes dimensions for conduit runs and junction box placements. There is a CHANGE OF CONDUIT PATH TO AV-308."),\
-        (3, "Page 3: This page focuses on the device legend, detailing symbols for various junction boxes (1-gang, 2-gang, 3-gang, 16x6x4, 8x8x4, 12x12x4, 14x14x4, 16x16x6). It also has notes on equipment rack elevations and an AV CABLE SCHEDULE."),\
-    ]\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/admin/user/<user_id>/chat-history/<chat_id>"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "DELETE"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  admin_delete_chat_history_entry\cf5 \strokec5 (\cf2 \strokec2 user_id\cf5 \strokec5 ,\cf2 \strokec2  chat_id\cf5 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf7 \cb3 \strokec7         Admin endpoint to delete a specific chat history entry for a user.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         This operation would typically interact directly with Firestore.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         Since Firestore operations are handled by the frontend, this backend endpoint is a placeholder\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         or would be used if the backend were responsible for all Firestore interactions.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         For now, this is a mock successful response as the frontend directly manages Firestore deletion.\cf2 \cb1 \strokec2 \
+\cf7 \cb3 \strokec7         """\cf2 \cb1 \strokec2 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3         \cf6 \strokec6 # In a real application, you would use Firebase Admin SDK to delete the document\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # from Firestore: db.collection("artifacts").document(appId).collection("users").document(user_id).collection("chatHistory").document(chat_id).delete()\cf2 \cb1 \strokec2 \
+\cb3         app.logger.info\cf5 \strokec5 (\cf7 \strokec7 f"Admin requested deletion of chat_id \cf2 \strokec2 \{chat_id\}\cf7 \strokec7  for user \cf2 \strokec2 \{user_id\}\cf7 \strokec7 . (Mock success)"\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Chat history entry '\cf2 \strokec2 \{chat_id\}\cf7 \strokec7 ' for user '\cf2 \strokec2 \{user_id\}\cf7 \strokec7 ' deleted successfully (mock)."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
 \
-    total_chunks = 0\
-    for page_num, page_content in conceptual_pages:\
-        chunks_to_ingest = chunk_text(page_content, chunk_size=100, overlap=20)\
-        for chunk in chunks_to_ingest:\
-            knowledge_base.append(\{'text': chunk, 'embedding': get_embedding(chunk), 'source': 'AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf', 'page': page_num\})\
-            total_chunks += 1\
-    print(f"Conceptual knowledge base initialized with \{total_chunks\} chunks.")\
+\cb3     \cf9 \strokec9 @app\cf2 \strokec2 .route\cf5 \strokec5 (\cf7 \strokec7 "/admin/rag-params"\cf5 \strokec5 ,\cf2 \strokec2  methods=\cf5 \strokec5 [\cf7 \strokec7 "GET"\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "POST"\cf5 \strokec5 ])\cf2 \cb1 \strokec2 \
+\cb3     \cf4 \cb3 \strokec4 def\cf2 \cb3 \strokec2  admin_rag_params\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3         \cf7 \strokec7 """Admin endpoint to get or update RAG parameters."""\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  request.method == \cf7 \strokec7 "GET"\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\cf2 \strokec2 rag_parameters\cf5 \strokec5 ),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 elif\cf2 \cb3 \strokec2  request.method == \cf7 \strokec7 "POST"\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3             data = request.get_json\cf5 \strokec5 ()\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 not\cf2 \cb3 \strokec2  data\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No JSON data provided"\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
 \
-    # Run the Flask app\
-    app.run(host='0.0.0.0', port=5000, debug=True)\
+\cb3             \cf6 \strokec6 # Validate and update parameters\cf2 \cb1 \strokec2 \
+\cb3             updated = \cf4 \cb3 \strokec4 False\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 for\cf2 \cb3 \strokec2  key\cf5 \strokec5 ,\cf2 \strokec2  value \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  data.items\cf5 \strokec5 ():\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  key \cf4 \cb3 \strokec4 in\cf2 \cb3 \strokec2  rag_parameters\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     \cf6 \strokec6 # Basic type validation\cf2 \cb1 \strokec2 \
+\cb3                     \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 isinstance\cf5 \cb3 \strokec5 (\cf2 \strokec2 rag_parameters\cf5 \strokec5 [\cf2 \strokec2 key\cf5 \strokec5 ],\cf2 \strokec2  \cf4 \cb3 \strokec4 int\cf5 \cb3 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3                         \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                             rag_parameters\cf5 \strokec5 [\cf2 \strokec2 key\cf5 \strokec5 ]\cf2 \strokec2  = \cf4 \cb3 \strokec4 int\cf5 \cb3 \strokec5 (\cf2 \strokec2 value\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                             updated = \cf4 \cb3 \strokec4 True\cf2 \cb1 \strokec2 \
+\cb3                         \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  ValueError\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Invalid value for \cf2 \strokec2 \{key\}\cf7 \strokec7 . Expected integer."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
+\cb3                     \cf4 \cb3 \strokec4 elif\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 isinstance\cf5 \cb3 \strokec5 (\cf2 \strokec2 rag_parameters\cf5 \strokec5 [\cf2 \strokec2 key\cf5 \strokec5 ],\cf2 \strokec2  \cf4 \cb3 \strokec4 float\cf5 \cb3 \strokec5 ):\cf2 \cb1 \strokec2 \
+\cb3                         \cf4 \cb3 \strokec4 try\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                             rag_parameters\cf5 \strokec5 [\cf2 \strokec2 key\cf5 \strokec5 ]\cf2 \strokec2  = \cf4 \cb3 \strokec4 float\cf5 \cb3 \strokec5 (\cf2 \strokec2 value\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                             updated = \cf4 \cb3 \strokec4 True\cf2 \cb1 \strokec2 \
+\cb3                         \cf4 \cb3 \strokec4 except\cf2 \cb3 \strokec2  ValueError\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                             \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "error"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 f"Invalid value for \cf2 \strokec2 \{key\}\cf7 \strokec7 . Expected float."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
+\cb3                     \cf6 \strokec6 # Add more type checks if needed (e.g., for strings)\cf2 \cb1 \strokec2 \
+\
+\cb3             \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  updated\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf6 \strokec6 # Re-initialize conversation chain with new parameters if vector store exists\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  vector_store\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                     \cf4 \cb3 \strokec4 global\cf2 \cb3 \strokec2  conversation_chain\cb1 \
+\cb3                     conversation_chain = get_conversation_chain\cf5 \strokec5 (\cf2 \strokec2 vector_store\cf5 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3                     memory.clear\cf5 \strokec5 ()\cf2 \strokec2  \cf6 \strokec6 # Clear memory to reflect new RAG behavior\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "RAG parameters updated successfully."\cf5 \strokec5 ,\cf2 \strokec2  \cf7 \strokec7 "new_params"\cf5 \strokec5 :\cf2 \strokec2  rag_parameters\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 200\cf2 \cb1 \strokec2 \
+\cb3             \cf4 \cb3 \strokec4 else\cf5 \cb3 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3                 \cf4 \cb3 \strokec4 return\cf2 \cb3 \strokec2  jsonify\cf5 \strokec5 (\{\cf7 \strokec7 "message"\cf5 \strokec5 :\cf2 \strokec2  \cf7 \strokec7 "No valid RAG parameters provided for update."\cf5 \strokec5 \}),\cf2 \strokec2  \cf8 \cb3 \strokec8 400\cf2 \cb1 \strokec2 \
+\
+\cb3     \cf4 \cb3 \strokec4 if\cf2 \cb3 \strokec2  \cf4 \cb3 \strokec4 __name__\cf2 \cb3 \strokec2  == \cf7 \strokec7 "__main__"\cf5 \strokec5 :\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # For local development, you might run with debug=True\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # In Docker, Gunicorn or a similar WSGI server will run the app\cf2 \cb1 \strokec2 \
+\cb3         app.run\cf5 \strokec5 (\cf2 \strokec2 host=\cf7 \strokec7 "0.0.0.0"\cf5 \strokec5 ,\cf2 \strokec2  port=\cf8 \cb3 \strokec8 5000\cf5 \cb3 \strokec5 ,\cf2 \strokec2  debug=\cf4 \cb3 \strokec4 False\cf5 \cb3 \strokec5 )\cf2 \cb1 \strokec2 \
+\cb3     \cb1 \
 }
