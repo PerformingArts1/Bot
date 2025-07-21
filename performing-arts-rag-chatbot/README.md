@@ -1,319 +1,169 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica-Bold;\f1\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;\red21\green21\blue22;\red69\green73\blue76;\red228\green234\blue244;
-\red13\green62\blue197;}
-{\*\expandedcolortbl;;\cssrgb\c10588\c10980\c11373;\cssrgb\c34118\c35686\c37255;\cssrgb\c91373\c93333\c96471;
-\cssrgb\c4314\c34118\c81569;}
-{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid1\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid1}
-{\list\listtemplateid2\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid101\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{circle\}}{\leveltext\leveltemplateid102\'01\uc0\u9702 ;}{\levelnumbers;}\fi-360\li1440\lin1440 }{\listname ;}\listid2}
-{\list\listtemplateid3\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid201\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid3}
-{\list\listtemplateid4\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid301\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid4}
-{\list\listtemplateid5\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid401\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{circle\}}{\leveltext\leveltemplateid402\'01\uc0\u9702 ;}{\levelnumbers;}\fi-360\li1440\lin1440 }{\listname ;}\listid5}
-{\list\listtemplateid6\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid501\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid6}}
-{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}{\listoverride\listid3\listoverridecount0\ls3}{\listoverride\listid4\listoverridecount0\ls4}{\listoverride\listid5\listoverridecount0\ls5}{\listoverride\listid6\listoverridecount0\ls6}}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\deftab720
-\pard\pardeftab720\sa160\partightenfactor0
+# Local RAG Chatbot
 
-\f0\b\fs44 \cf2 \expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Performing Arts Center AI Chatbot (Frontend)\
-\pard\pardeftab720\sa320\partightenfactor0
+![RAG System Diagram](https://placehold.co/800x400/E0F2F7/000?text=Local+RAG+Chatbot+System)
 
-\f1\b0\fs32 \cf2 This is the frontend application for the Performing Arts Center AI Chatbot. It provides a user interface for interacting with the RAG (Retrieval Augmented Generation) backend, allowing users to chat with an AI assistant, upload documents for ingestion, and browse knowledge base resources.\
-\pard\pardeftab720\sa160\partightenfactor0
+A full-stack, local-first AI chatbot application with Retrieval-Augmented Generation (RAG) capabilities. This system allows users to upload their own documents, chat with a local Large Language Model (LLM) that leverages these documents for informed responses, and manage LLM settings, all running entirely on your local machine using Docker.
 
-\f0\b\fs40 \cf2 Features\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls1\ilvl0
-\fs32 \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Interactive Chat Interface:
-\f1\b0  Engage in conversations with the AI assistant.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Multimodal Input:
-\f1\b0  Send text queries along with images for AI analysis.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 RAG Context Display:
-\f1\b0  Visually presents the retrieved document chunks, including source, AI-generated tags, extracted table content, and associated images, directly within the chat.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Asynchronous Document Upload:
-\f1\b0  Upload various document types (PDF, DOCX, XLSX, images, etc.) for backend processing and ingestion into the knowledge base.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Knowledge Base Browsing:
-\f1\b0  Dedicated section to explore simulated training documents, inventory lists, and training videos.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Firebase Integration:
-\f1\b0  Utilizes Firebase Authentication for anonymous user sessions and Firestore for persistent chat history.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Real-time Backend Status:
-\f1\b0  Displays the connection status to the Python backend.\
-\ls1\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Responsive Design:
-\f1\b0  Built with Tailwind CSS for a mobile-first and adaptive user experience.\
-\pard\pardeftab720\sa160\partightenfactor0
+## ✨ Features
 
-\f0\b\fs40 \cf2 Architecture\
-\pard\pardeftab720\sa160\partightenfactor0
+* **Local-First Execution:** All components (LLM, vector database, backend, frontend) run locally in Docker containers.
+* **Retrieval-Augmented Generation (RAG):** The chatbot answers questions by retrieving relevant information from your uploaded documents.
+* **Document Management:**
+    * Upload various document types (e.g., `.txt`, `.pdf`, `.docx`) for indexing.
+    * View a paginated and searchable list of uploaded documents.
+    * Preview the extracted text content of any uploaded document.
+    * Delete documents, removing them from the RAG system.
+* **Interactive Chat Interface:**
+    * Conversational chat window with user and AI messages.
+    * Source attribution for AI responses, indicating which documents and chunks were used.
+    * Copy chat messages to clipboard.
+    * Clear entire chat history.
+* **Configurable LLM Settings:**
+    * Select from locally available Ollama models (e.g., `llama2`, `mistral`).
+    * Adjust LLM parameters like Temperature, Top K, and Top P.
+* **Persistent Data:** Chat history, document metadata, and the vector database are persisted to disk, so your data remains even if containers are stopped.
 
-\f1\b0\fs32 \cf2 The frontend is a React application built with:\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls2\ilvl0
-\f0\b \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 React:
-\f1\b0  For building the user interface.\
-\ls2\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Tailwind CSS:
-\f1\b0  A utility-first CSS framework for rapid styling and responsive design.\
-\ls2\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Lucide React:
-\f1\b0  A collection of beautiful and customizable open-source icons.\
-\ls2\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Firebase:
-\f1\b0 \
-\pard\tx940\tx1440\pardeftab720\li1440\fi-1440\sa160\partightenfactor0
-\ls2\ilvl1
-\f0\b \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Authentication:
-\f1\b0  For managing user sessions (anonymous sign-in).\
-\ls2\ilvl1
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Firestore:
-\f1\b0  A NoSQL cloud database for storing chat history in real-time.\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls2\ilvl0
-\f0\b \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Backend Interaction:
-\f1\b0  Communicates with the separate Python Flask backend API for AI chat responses and document ingestion.\
-\pard\pardeftab720\sa160\partightenfactor0
+## 🚀 Technologies Used
 
-\f0\b\fs40 \cf2 Setup\
-\pard\pardeftab720\sa320\partightenfactor0
+* **Backend:**
+    * **Python Flask:** RESTful API server.
+    * **Langchain:** Framework for building LLM applications, handling RAG chains, document loading, and chunking.
+    * **Ollama:** Local LLM inference server and embedding provider.
+    * **ChromaDB:** Local vector database for storing document embeddings.
+    * **Unstructured.io:** For robust document parsing and text extraction from various file formats.
+    * **TinyDB:** Lightweight, file-based database for persisting chat history and document metadata.
+* **Frontend:**
+    * **React.js:** Modern JavaScript library for building user interfaces.
+    * **Vite:** Fast frontend build tool.
+    * **Tailwind CSS:** Utility-first CSS framework for styling.
+    * **Lucide React:** Icon library for clean UI elements.
+* **Containerization:**
+    * **Docker:** For packaging applications into isolated containers.
+    * **Docker Compose:** For defining and running multi-container Docker applications.
 
-\f1\b0\fs32 \cf2 Follow these steps to get the frontend running locally.\
-\pard\pardeftab720\sa160\partightenfactor0
+## 📋 Prerequisites
 
-\f0\b \cf2 Prerequisites\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls3\ilvl0\cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Node.js
-\f1\b0  (LTS version recommended)\
-\ls3\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 npm
-\f1\b0  (Node Package Manager, comes with Node.js) or 
-\fs28 \cf3 \cb4 \strokec3 yarn
-\fs32 \cf2 \cb1 \strokec2 \
-\pard\pardeftab720\sa160\partightenfactor0
+Before you begin, ensure you have the following installed on your system:
 
-\f0\b \cf2 1. Clone the Repository\
-\pard\pardeftab720\sa320\partightenfactor0
+* **Docker Desktop:** This includes Docker Engine, Docker CLI, and Docker Compose.
+    * [Download Docker Desktop](https://www.docker.com/products/docker-desktop/) (Available for macOS, Windows, Linux).
+    * After installation, make sure Docker Desktop is running. You should see the Docker whale icon in your system tray/menu bar.
 
-\f1\b0 \cf2 Assuming you have a monorepo structure where 
-\fs28 \cf3 \cb4 \strokec3 ai-chatbot-app
-\fs32 \cf2 \cb1 \strokec2  is your frontend folder:\
-\pard\pardeftab720\partightenfactor0
+## 📦 Setup and Running the Application
 
-\fs28 \cf3 \cb4 \strokec3 git clone <your-repo-url>\
-cd <your-repo-name>/ai-chatbot-app # Navigate to your frontend directory\
-\pard\pardeftab720\partightenfactor0
-\cf3 \cb1 \
-\pard\pardeftab720\sa160\partightenfactor0
+Follow these steps to get your Local RAG Chatbot up and running:
 
-\f0\b\fs32 \cf2 \strokec2 2. Install Dependencies\
-\pard\pardeftab720\partightenfactor0
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd your-rag-project # Navigate into the project directory
+    ```
+    *(Replace `<your-repository-url>` with the actual URL of your GitHub repository)*
 
-\f1\b0\fs28 \cf3 \cb4 \strokec3 npm install\
-# or\
-yarn install\
-\pard\pardeftab720\partightenfactor0
-\cf3 \cb1 \
-\pard\pardeftab720\sa160\partightenfactor0
+2.  **Configure Environment Variables (Optional but Recommended):**
+    The project uses a `.env` file for configuration. A default `.env` is provided. You can customize the LLM model, embedding model, and other parameters by editing this file at the root of your project:
+    ```bash
+    # .env
+    OLLAMA_HOST=http://ollama:11434
+    LLM_MODEL=llama2 # Change to 'mistral', 'llama3', etc., if desired
+    EMBEDDING_MODEL=nomic-embed-text
+    LLM_TEMPERATURE=0.7
+    LLM_TOP_K=40
+    LLM_TOP_P=0.9
+    REACT_APP_API_BASE_URL=http://localhost:5000
+    ```
+    * **Note:** The `OLLAMA_HOST` inside `docker-compose.yml` points to the `ollama` service name within the Docker network, which is correct for inter-container communication.
 
-\f0\b\fs32 \cf2 \strokec2 3. Configure Tailwind CSS\
-\pard\pardeftab720\sa320\partightenfactor0
+3.  **Build and Run Docker Containers:**
+    From the root of your `your-rag-project` directory, execute the Docker Compose command:
+    ```bash
+    docker-compose up --build -d
+    ```
+    * `--build`: This command builds the Docker images for your backend and frontend services. This is essential for the first run and after any changes to `Dockerfile`s or dependency files (`requirements.txt`, `package.json`).
+    * `-d`: Runs the containers in "detached" mode, allowing them to run in the background.
 
-\f1\b0 \cf2 Ensure your 
-\fs28 \cf3 \cb4 \strokec3 tailwind.config.js
-\fs32 \cf2 \cb1 \strokec2  and 
-\fs28 \cf3 \cb4 \strokec3 src/index.css
-\fs32 \cf2 \cb1 \strokec2  (or 
-\fs28 \cf3 \cb4 \strokec3 src/App.css
-\fs32 \cf2 \cb1 \strokec2 ) are correctly set up.\
-\pard\pardeftab720\sa320\partightenfactor0
+4.  **Monitor Ollama Model Download (Crucial First Step):**
+    The `ollama` service will start and automatically attempt to download the specified LLM (`llama2` by default) and embedding models (`nomic-embed-text` by default). This step requires an active internet connection and can take a considerable amount of time depending on your network speed and model sizes.
 
-\fs28 \cf3 \cb4 \strokec3 tailwind.config.js
-\f0\b\fs32 \cf2 \cb1 \strokec2 :
-\f1\b0 \
-\pard\pardeftab720\partightenfactor0
+    To monitor the download progress, open a new terminal window and run:
+    ```bash
+    docker-compose logs -f ollama
+    ```
+    Wait until you see messages indicating that Ollama is "serving" or "listening" on port 11434. This confirms the models are downloaded and Ollama is ready.
 
-\fs28 \cf3 \cb4 \strokec3 /** @type \{import('tailwindcss').Config\} */\
-module.exports = \{\
-  content: [\
-    "./src/**/*.\{js,jsx,ts,tsx\}",\
-  ],\
-  theme: \{\
-    extend: \{\
-      fontFamily: \{\
-        inter: ['Inter', 'sans-serif'],\
-      \},\
-    \},\
-  \},\
-  plugins: [],\
-\}\
-\pard\pardeftab720\partightenfactor0
-\cf3 \cb1 \
-\pard\pardeftab720\sa320\partightenfactor0
-\cf3 \cb4 src/index.css
-\fs32 \cf2 \cb1 \strokec2  (or your main CSS file):\
-\pard\pardeftab720\partightenfactor0
+5.  **Access the Application:**
+    Once all services are up and running (including Ollama with its models), open your web browser and navigate to:
+    ```
+    http://localhost:3000
+    ```
 
-\fs28 \cf3 \cb4 \strokec3 @tailwind base;\
-@tailwind components;\
-@tailwind utilities;\
-\
-/* Add Inter font */\
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');\
-\
-/* Custom scrollbar for better aesthetics */\
-.custom-scrollbar::-webkit-scrollbar \{\
-  width: 8px;\
-\}\
-\
-.custom-scrollbar::-webkit-scrollbar-track \{\
-  background: #f1f1f1;\
-  border-radius: 10px;\
-\}\
-\
-.custom-scrollbar::-webkit-scrollbar-thumb \{\
-  background: #888;\
-  border-radius: 10px;\
-\}\
-\
-.custom-scrollbar::-webkit-scrollbar-thumb:hover \{\
-  background: #555;\
-\}\
-\pard\pardeftab720\partightenfactor0
-\cf3 \cb1 \
-\pard\pardeftab720\sa160\partightenfactor0
+You should now see the Local RAG Chatbot frontend!
 
-\f0\b\fs32 \cf2 \strokec2 4. Firebase Configuration\
-\pard\pardeftab720\sa160\partightenfactor0
+## 📂 Project Structure
 
-\f1\b0 \cf2 The application expects Firebase configuration and an initial authentication token to be injected into the environment. This is typically handled by the platform where the application is hosted (e.g., Google Cloud Canvas).\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls4\ilvl0
-\fs28 \cf3 \cb4 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec3 __firebase_config
-\fs32 \cf2 \cb1 \strokec2 : Your Firebase project's configuration object (JSON string).\
-\ls4\ilvl0
-\fs28 \cf3 \cb4 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec3 __app_id
-\fs32 \cf2 \cb1 \strokec2 : A unique identifier for your application (string).\
-\ls4\ilvl0
-\fs28 \cf3 \cb4 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec3 __initial_auth_token
-\fs32 \cf2 \cb1 \strokec2 : A custom Firebase authentication token (string).\
-\pard\pardeftab720\sa320\partightenfactor0
-\cf2 If running locally for development, you might need to mock these global variables or set them up in your build process.\
-\pard\pardeftab720\sa160\partightenfactor0
 
-\f0\b \cf2 5. Run the Application\
-\pard\pardeftab720\sa320\partightenfactor0
+your-rag-project/
+├── .env                      # Environment variables for Docker Compose and services
+├── docker-compose.yml        # Defines and orchestrates Docker services
+├── backend/                  # Flask API for RAG logic
+│   ├── Dockerfile            # Dockerfile for building the Flask backend image
+│   ├── app.py                # Main Flask application
+│   └── requirements.txt      # Python dependencies for the backend
+└── frontend/                 # React application for the user interface
+├── Dockerfile            # Dockerfile for building the React frontend image
+├── package.json          # Node.js dependencies for React
+├── tailwind.config.js    # Tailwind CSS configuration
+├── src/
+│   ├── App.js            # Main React application component
+│   └── index.css         # Global CSS and Tailwind directives
+└── public/
+└── index.html        # Main HTML file for the React app
 
-\f1\b0 \cf2 First, ensure your 
-\f0\b Python Backend
-\f1\b0  is fully running (Flask API, Celery Worker, Celery Beat, Ollama, Redis). Refer to the backend's 
-\fs28 \cf3 \cb4 \strokec3 README.md
-\fs32 \cf2 \cb1 \strokec2  for instructions.\
-Once the backend is operational, start the React development server:\
-\pard\pardeftab720\partightenfactor0
 
-\fs28 \cf3 \cb4 \strokec3 npm start\
-# or\
-yarn start\
-\pard\pardeftab720\partightenfactor0
-\cf3 \cb1 \
-\pard\pardeftab720\sa320\partightenfactor0
+## 💡 Usage
 
-\fs32 \cf2 \strokec2 The application should open in your browser at 
-\fs28 \cf3 \cb4 \strokec3 http://localhost:3000
-\fs32 \cf2 \cb1 \strokec2  (or another available port).\
-\pard\pardeftab720\sa160\partightenfactor0
+1.  **Documents Tab:**
+    * Go to the "Documents" tab.
+    * Use the "Upload New Document" section to select `.txt`, `.pdf`, or `.docx` files. Click "Upload". The backend will process and index the document.
+    * The "Your Uploaded Documents" section will list your documents. You can search by filename and navigate through pages if you have many documents.
+    * Use the "Eye" icon to preview the extracted text content.
+    * Use the "Trash" icon to delete a document from the system.
 
-\f0\b\fs40 \cf2 Usage\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls5\ilvl0
-\fs32 \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Chat Tab:
-\f1\b0 \
-\pard\tx940\tx1440\pardeftab720\li1440\fi-1440\sa160\partightenfactor0
-\ls5\ilvl1\cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Type your query in the input field and press Enter or click the "Send" button.\
-\ls5\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Click the microphone icon for voice input (Chrome browser recommended).\
-\ls5\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Click the image icon to upload an image along with your text query for multimodal interactions.\
-\ls5\ilvl1\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Click on the "Quick Access & Common Queries" buttons to send predefined questions.\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls5\ilvl0
-\f0\b \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Docs & Inventory Tab:
-\f1\b0 \
-\pard\tx940\tx1440\pardeftab720\li1440\fi-1440\sa160\partightenfactor0
-\ls5\ilvl1
-\f0\b \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Upload New Documents:
-\f1\b0  Use the "Click to select document for upload" area to ingest new files into the RAG system. Supported formats include PDF, DOCX, XLSX, PPTX, TXT, MD, JSON, common image types, and DXF.\
-\ls5\ilvl1
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Browse Resources:
-\f1\b0  Explore simulated lists of training documents, videos, and inventory items. Use the search bars to filter content.\
-\ls5\ilvl1
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u9702 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Floor Plans:
-\f1\b0  Interact with the conceptual floor map to see simulated details about different areas of the performing arts center.\
-\pard\pardeftab720\sa160\partightenfactor0
+2.  **Chat Tab:**
+    * Go to the "Chat" tab.
+    * Type your questions in the input field at the bottom.
+    * The AI will respond, leveraging the content of your uploaded documents.
+    * Responses will include "Sources" if information was retrieved from your documents. Click "View Sources" to see snippets.
+    * Use the "Copy" icon to copy any chat message.
+    * Use the "Clear" button to clear the chat history.
 
-\f0\b\fs40 \cf2 Future Enhancements\
-\pard\tx220\tx720\pardeftab720\li720\fi-720\sa160\partightenfactor0
-\ls6\ilvl0
-\fs32 \cf2 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 User Authentication:
-\f1\b0  Implement full user login/registration with Firebase.\
-\ls6\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Role-Based Access Control:
-\f1\b0  Restrict access to certain features (e.g., document upload) based on user roles.\
-\ls6\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Real Document Display:
-\f1\b0  Integrate a PDF/document viewer to display ingested documents directly in the frontend.\
-\ls6\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Interactive Floor Map:
-\f1\b0  Develop a fully functional interactive floor map that dynamically loads data from the backend's indexed documents.\
-\ls6\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Searchable Inventory:
-\f1\b0  Connect inventory lists to a real backend database for dynamic search and management.\
-\ls6\ilvl0
-\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
-\outl0\strokewidth0 \strokec2 Live Video Integration:
-\f1\b0  Embed actual training videos from YouTube or other platforms.\
-\pard\pardeftab720\sa160\partightenfactor0
+3.  **Settings Tab:**
+    * Go to the "Settings" tab.
+    * Select a different Ollama model from the dropdown (ensure it's downloaded locally).
+    * Adjust LLM parameters like Temperature, Top K, and Top P.
+    * Click "Save Settings" to apply changes.
 
-\f0\b\fs40 \cf2 License\
-\pard\pardeftab720\sa320\partightenfactor0
+## 🐛 Troubleshooting
 
-\f1\b0\fs32 \cf2 This project is licensed under the MIT License - see the {\field{\*\fldinst{HYPERLINK "https://www.google.com/search?q=LICENSE"}}{\fldrslt \cf5 \ul \ulc5 \strokec5 LICENSE}} file for details.\
-}
+* **"Could not connect to Ollama. Is it running?" / LLM errors:**
+    * Ensure Docker Desktop is running.
+    * Run `docker-compose logs -f ollama` in your terminal. Check for errors during model download or if Ollama failed to start serving.
+    * Verify that the models specified in your `.env` file (`LLM_MODEL`, `EMBEDDING_MODEL`) are correctly spelled and available on Ollama Hub.
+    * Ensure you have enough disk space for the Ollama models.
+* **"Failed to upload document" / Document processing errors:**
+    * Check the `docker-compose logs -f backend` for detailed Python errors.
+    * Ensure the document is a supported format (`.txt`, `.pdf`, `.docx`). For `.pdf` and `.docx`, `unstructured.io` relies on system-level dependencies which might not be fully present in the base Python Docker image. If you encounter issues with these file types, you might need to add more `apt-get install` commands to the `backend/Dockerfile` (e.g., `poppler-utils`, `tesseract-ocr`, `libreoffice-writer` for LibreOffice conversion).
+* **Frontend not loading (`http://localhost:3000`):**
+    * Check `docker-compose logs -f frontend` for build or serving errors.
+    * Ensure port 3000 is not already in use by another application on your host machine.
+    * Try rebuilding the frontend: `docker-compose build frontend` then `docker-compose up -d frontend`.
+* **Data not persisting:**
+    * Ensure the `data/` directory exists at the root of your project and has proper write permissions. Docker volumes rely on this.
+
+## 🤝 Contributing
+
+Feel free to fork this repository, open issues, or submit pull requests.
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).

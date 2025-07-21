@@ -4,6 +4,7 @@ import os
 import json
 import uuid
 import datetime
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -29,6 +30,10 @@ import requests
 # Load environment variables from .env file
 load_dotenv()
 
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 CORS(app) # Enable CORS for all routes
 
@@ -48,10 +53,13 @@ CHAT_HISTORY_FILE = os.path.join(TINYDB_DIR, 'chat_history.json')
 DOCUMENTS_METADATA_FILE = os.path.join(TINYDB_DIR, 'documents_metadata.json')
 LLM_SETTINGS_FILE = os.path.join(TINYDB_DIR, 'llm_settings.json')
 
+# --- Constants ---
+ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.docx'}
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
+PREVIEW_CHAR_LIMIT = 10000
 
 # --- Global Variables for RAG System ---
-# Initialize LLM and Embeddings (default to Llama2 and Nomic-embed-text)
-# These will be updated by settings from the frontend
 LLM_MODEL = os.getenv("LLM_MODEL", "llama2")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.7))
@@ -66,53 +74,52 @@ retrieval_chain = None # The main RAG chain
 chat_history_data = [] # Stores chat messages (in-memory, also persisted to file)
 documents_metadata = {} # Stores metadata about uploaded documents {doc_id: {filename, path, upload_date, num_chunks}}
 
+# --- Utility Functions ---
+
+def allowed_file(filename):
+    return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- Persistence Functions ---
 
 def load_documents_metadata():
-    """Loads document metadata from a JSON file."""
     global documents_metadata
     if os.path.exists(DOCUMENTS_METADATA_FILE):
         try:
             with open(DOCUMENTS_METADATA_FILE, 'r') as f:
                 documents_metadata = json.load(f)
-            print(f"Loaded {len(documents_metadata)} document metadata entries.")
+            logger.info(f"Loaded {len(documents_metadata)} document metadata entries.")
         except json.JSONDecodeError:
-            print(f"Warning: {DOCUMENTS_METADATA_FILE} is corrupted or empty. Starting with empty metadata.")
+            logger.warning(f"{DOCUMENTS_METADATA_FILE} is corrupted or empty. Starting with empty metadata.")
             documents_metadata = {}
     else:
         documents_metadata = {}
-        print("No existing document metadata found.")
+        logger.info("No existing document metadata found.")
 
 def save_documents_metadata():
-    """Saves document metadata to a JSON file."""
     with open(DOCUMENTS_METADATA_FILE, 'w') as f:
         json.dump(documents_metadata, f, indent=4)
-    print("Document metadata saved.")
+    logger.info("Document metadata saved.")
 
 def load_chat_history():
-    """Loads chat history from a JSON file."""
     global chat_history_data
     if os.path.exists(CHAT_HISTORY_FILE):
         try:
             with open(CHAT_HISTORY_FILE, 'r') as f:
                 chat_history_data = json.load(f)
-            print(f"Loaded {len(chat_history_data)} chat history entries.")
+            logger.info(f"Loaded {len(chat_history_data)} chat history entries.")
         except json.JSONDecodeError:
-            print(f"Warning: {CHAT_HISTORY_FILE} is corrupted or empty. Starting with empty chat history.")
+            logger.warning(f"{CHAT_HISTORY_FILE} is corrupted or empty. Starting with empty chat history.")
             chat_history_data = []
     else:
         chat_history_data = []
-        print("No existing chat history found.")
+        logger.info("No existing chat history found.")
 
 def save_chat_history():
-    """Saves chat history to a JSON file."""
     with open(CHAT_HISTORY_FILE, 'w') as f:
         json.dump(chat_history_data, f, indent=4)
-    print("Chat history saved.")
+    logger.info("Chat history saved.")
 
 def load_llm_settings():
-    """Loads LLM settings from a JSON file."""
     global LLM_MODEL, LLM_TEMPERATURE, LLM_TOP_K, LLM_TOP_P
     if os.path.exists(LLM_SETTINGS_FILE):
         try:
@@ -122,15 +129,14 @@ def load_llm_settings():
                 LLM_TEMPERATURE = loaded_settings.get('temperature', LLM_TEMPERATURE)
                 LLM_TOP_K = loaded_settings.get('top_k', LLM_TOP_K)
                 LLM_TOP_P = loaded_settings.get('top_p', LLM_TOP_P)
-            print("LLM settings loaded.")
+            logger.info("LLM settings loaded.")
         except json.JSONDecodeError:
-            print(f"Warning: {LLM_SETTINGS_FILE} is corrupted or empty. Using default LLM settings.")
-            save_llm_settings() # Save defaults if file is bad
+            logger.warning(f"{LLM_SETTINGS_FILE} is corrupted or empty. Using default LLM settings.")
+            save_llm_settings()
     else:
-        save_llm_settings() # Save default settings if file doesn't exist
+        save_llm_settings()
 
 def save_llm_settings():
-    """Saves current LLM settings to a JSON file."""
     settings_to_save = {
         "model": LLM_MODEL,
         "temperature": LLM_TEMPERATURE,
@@ -139,80 +145,65 @@ def save_llm_settings():
     }
     with open(LLM_SETTINGS_FILE, 'w') as f:
         json.dump(settings_to_save, f, indent=4)
-    print("LLM settings saved.")
+    logger.info("LLM settings saved.")
 
 # --- RAG System Initialization and Updates ---
 
 def initialize_rag_system():
-    """Initializes LLM, Embeddings, Vector Store, and RAG chain."""
     global llm, embeddings, vectorstore, retrieval_chain
 
-    # Load persistent data
-    load_llm_settings() # Load settings first to configure LLM
+    load_llm_settings()
     load_documents_metadata()
     load_chat_history()
 
-    # Initialize LLM and Embeddings based on loaded settings
     try:
         llm = Ollama(
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             top_k=LLM_TOP_K,
             top_p=LLM_TOP_P,
-            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434") # Use OLLAMA_HOST from .env
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434")
         )
         embeddings = OllamaEmbeddings(
             model=EMBEDDING_MODEL,
-            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434") # Use OLLAMA_HOST from .env
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434")
         )
-        print(f"LLM initialized: {LLM_MODEL}, Embeddings initialized: {EMBEDDING_MODEL}")
+        logger.info(f"LLM initialized: {LLM_MODEL}, Embeddings initialized: {EMBEDDING_MODEL}")
     except Exception as e:
-        print(f"CRITICAL ERROR: Could not initialize Ollama LLM or Embeddings. Is Ollama running and models pulled? Error: {e}")
-        llm = None # Set to None to indicate failure
+        logger.critical(f"Could not initialize Ollama LLM or Embeddings. Is Ollama running and models pulled? Error: {e}")
+        llm = None
         embeddings = None
-        # Do not return here, allow the app to start but with limited functionality
-        # Endpoints will check for llm/embeddings being None
 
-    # Initialize or load ChromaDB
     try:
         vectorstore = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
-        print(f"Loaded ChromaDB from {PERSIST_DIRECTORY}")
+        logger.info(f"Loaded ChromaDB from {PERSIST_DIRECTORY}")
     except Exception as e:
-        print(f"Could not load ChromaDB, creating a new one. Error: {e}")
+        logger.warning(f"Could not load ChromaDB, creating a new one. Error: {e}")
         vectorstore = Chroma(embedding_function=embeddings, persist_directory=PERSIST_DIRECTORY)
         vectorstore.persist()
-        print(f"Created new ChromaDB at {PERSIST_DIRECTORY}")
+        logger.warning(f"Created new ChromaDB at {PERSIST_DIRECTORY}. Previous data may be lost.")
 
-    # Create the RAG chain
     _create_rag_chain()
-    print("RAG system initialized.")
+    logger.info("RAG system initialized.")
 
 def _create_rag_chain():
-    """Creates or re-creates the RAG retrieval chain."""
     global retrieval_chain, llm, vectorstore
 
     if llm is None or vectorstore is None:
-        print("Cannot create RAG chain: LLM or Vectorstore not initialized. RAG functionality will be limited.")
+        logger.error("Cannot create RAG chain: LLM or Vectorstore not initialized. RAG functionality will be limited.")
         retrieval_chain = None
         return
 
-    # Define the prompt template for the LLM
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant. Answer the user's questions based on the provided context. If you don't know the answer, just say that you don't know, don't try to make up an answer. Provide sources for your answers, referencing the original filename, chunk index, and document ID."),
-        ("placeholder", "{chat_history}"), # Placeholder for chat history
-        ("human", "{input}"), # User's current question
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
     ])
 
-    # Create the document chain (combines retrieved documents with the prompt)
     document_chain = create_stuff_documents_chain(llm, prompt)
-
-    # Create the retriever from the vector store
     retriever = vectorstore.as_retriever()
-
-    # Create the full retrieval chain
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
-    print("RAG retrieval chain created.")
-
+    logger.info("RAG retrieval chain created.")
 
 # --- API Endpoints ---
 
@@ -223,32 +214,26 @@ def index():
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
     if 'file' not in request.files:
-        return jsonify({"error": "No file part"}), 400
+        return jsonify({"error": "No file part", "success": False}), 400
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        return jsonify({"error": "No selected file", "success": False}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Unsupported file type", "success": False}), 400
     if file:
         original_filename = secure_filename(file.filename)
-        document_id = str(uuid.uuid4()) # Generate a unique ID for the document
+        document_id = str(uuid.uuid4())
         file_extension = os.path.splitext(original_filename)[1].lower()
-        # Create a unique filename on disk to avoid conflicts
         filename_on_disk = f"{document_id}{file_extension}"
         filepath = os.path.join(UPLOAD_FOLDER, filename_on_disk)
         file.save(filepath)
 
         try:
-            # Use unstructured.io to parse the document content
             elements = partition(filename=filepath)
-            
-            # Convert elements to Langchain Document objects
-            # We'll use RecursiveCharacterTextSplitter for chunking
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
             langchain_docs = []
             for i, element in enumerate(elements):
                 if element.text.strip():
-                    # Split the element text into smaller chunks if it's too long
-                    # This ensures smaller, more manageable chunks for the vector store
                     sub_chunks = text_splitter.split_text(element.text)
                     for j, sub_chunk_text in enumerate(sub_chunks):
                         doc = LangchainDocument(
@@ -256,66 +241,61 @@ def upload_document():
                             metadata={
                                 "document_id": document_id,
                                 "original_filename": original_filename,
-                                "chunk_index": f"{i}-{j}", # Combine element index and sub-chunk index
-                                "source_type": element.category # e.g., 'Title', 'NarrativeText'
+                                "chunk_index": f"{i}-{j}",
+                                "source_type": element.category
                             }
                         )
                         langchain_docs.append(doc)
 
             if not langchain_docs:
-                os.remove(filepath) # Clean up if no documents were loaded
-                return jsonify({"error": "Could not extract content from document. Ensure it's a supported format (PDF, TXT, DOCX, etc.) and not empty."}), 500
+                os.remove(filepath)
+                return jsonify({"error": "Could not extract content from document. Ensure it's a supported format (PDF, TXT, DOCX, etc.) and not empty.", "success": False}), 500
 
-            # Add documents to the vectorstore
             global vectorstore
-            if vectorstore is None: # Should be initialized, but fallback
-                initialize_rag_system() # Attempt to re-initialize if it failed earlier
+            if vectorstore is None:
+                initialize_rag_system()
 
             if vectorstore:
                 vectorstore.add_documents(langchain_docs)
-                vectorstore.persist() # Persist changes to disk
+                vectorstore.persist()
             else:
                 os.remove(filepath)
-                return jsonify({"error": "Vector store not initialized. Cannot index document."}), 500
+                return jsonify({"error": "Vector store not initialized. Cannot index document.", "success": False}), 500
 
-            # Store metadata
             documents_metadata[document_id] = {
                 "original_filename": original_filename,
-                "filename_on_disk": filename_on_disk, # Store the name used on disk
-                "filepath": filepath, # Full path to the file
+                "filename_on_disk": filename_on_disk,
+                "filepath": filepath,
                 "upload_date": datetime.datetime.now().isoformat(),
-                "num_chunks": len(langchain_docs) # Number of elements/chunks processed
+                "num_chunks": len(langchain_docs)
             }
             save_documents_metadata()
-
-            # Recreate RAG chain to ensure it uses the latest vectorstore state
             _create_rag_chain()
 
             return jsonify({
                 "message": "Document uploaded and processed successfully",
                 "id": document_id,
                 "original_filename": original_filename,
-                "num_chunks": len(langchain_docs)
+                "num_chunks": len(langchain_docs),
+                "success": True
             }), 200
         except Exception as e:
-            os.remove(filepath) # Clean up partially processed file
-            print(f"Error processing document: {e}")
-            return jsonify({"error": f"Error processing document: {e}. Check backend console for details."}), 500
+            os.remove(filepath)
+            logger.error(f"Error processing document: {e}")
+            return jsonify({"error": f"Error processing document: {e}. Check backend console for details.", "success": False}), 500
 
 @app.route('/documents', methods=['GET'])
 def get_documents():
     search_query = request.args.get('query', '').lower()
     page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 5)) # Default limit to 5, matches frontend
+    limit = int(request.args.get('limit', 5))
 
-    # Convert documents_metadata dict to a list for filtering and sorting
     all_docs = []
     for doc_id, meta in documents_metadata.items():
         doc_info = meta.copy()
         doc_info['id'] = doc_id
         all_docs.append(doc_info)
 
-    # Apply search filter
     if search_query:
         filtered_docs = [
             doc for doc in all_docs
@@ -324,12 +304,8 @@ def get_documents():
     else:
         filtered_docs = all_docs
 
-    # Sort documents by upload date (newest first)
     filtered_docs.sort(key=lambda x: x['upload_date'], reverse=True)
-
     total_documents = len(filtered_docs)
-    
-    # Apply pagination
     start_index = (page - 1) * limit
     end_index = start_index + limit
     paginated_docs = filtered_docs[start_index:end_index]
@@ -338,92 +314,80 @@ def get_documents():
         "documents": paginated_docs,
         "total_documents": total_documents,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "success": True
     }), 200
 
 @app.route('/delete_document/<document_id>', methods=['DELETE'])
 def delete_document(document_id):
     if document_id not in documents_metadata:
-        return jsonify({"error": "Document not found"}), 404
+        return jsonify({"error": "Document not found", "success": False}), 404
 
     doc_info = documents_metadata[document_id]
     filepath = doc_info['filepath']
 
     try:
-        # Delete document from ChromaDB by its document_id
         global vectorstore
         if vectorstore:
-            # Langchain's Chroma.delete() method accepts a where clause for metadata filtering
             vectorstore.delete(where={"document_id": document_id})
-            vectorstore.persist() # Persist changes
-            print(f"Deleted chunks for document {document_id} from ChromaDB.")
+            vectorstore.persist()
+            logger.info(f"Deleted chunks for document {document_id} from ChromaDB.")
         else:
-            print("Vectorstore not initialized, cannot delete chunks from ChromaDB.")
+            logger.warning("Vectorstore not initialized, cannot delete chunks from ChromaDB.")
 
-        # Delete the file from the upload folder
         if os.path.exists(filepath):
             os.remove(filepath)
-            print(f"Deleted file: {filepath}")
+            logger.info(f"Deleted file: {filepath}")
 
-        # Remove from our metadata tracking
         del documents_metadata[document_id]
         save_documents_metadata()
-
-        # Recreate RAG chain to ensure it uses the latest vectorstore state
         _create_rag_chain()
 
-        return jsonify({"message": "Document deleted successfully"}), 200
+        return jsonify({"message": "Document deleted successfully", "success": True}), 200
     except Exception as e:
-        print(f"Error deleting document {document_id}: {e}")
-        return jsonify({"error": f"Failed to delete document: {str(e)}"}), 500
+        logger.error(f"Error deleting document {document_id}: {e}")
+        return jsonify({"error": f"Failed to delete document: {str(e)}", "success": False}), 500
 
 @app.route('/preview_extracted_text/<document_id>', methods=['GET'])
 def preview_extracted_text(document_id):
     if document_id not in documents_metadata:
-        return jsonify({"error": "Document not found"}), 404
+        return jsonify({"error": "Document not found", "success": False}), 404
 
     filepath = documents_metadata[document_id]['filepath']
     if not os.path.exists(filepath):
-        return jsonify({"error": "Document file not found on server"}), 404
+        return jsonify({"error": "Document file not found on server", "success": False}), 404
 
     try:
-        # Read the entire content of the file
-        # For larger files, consider streaming or reading in chunks
         with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return jsonify({"content": content}), 200
+            content = f.read(PREVIEW_CHAR_LIMIT)
+        return jsonify({"content": content, "success": True}), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to read document content: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to read document content: {str(e)}", "success": False}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_message_content = data.get('message')
     if not user_message_content:
-        return jsonify({"error": "No message provided"}), 400
+        return jsonify({"error": "No message provided", "success": False}), 400
 
-    # Add user message to history
     chat_history_data.append({"role": "user", "content": user_message_content, "timestamp": datetime.datetime.now().isoformat()})
     save_chat_history()
 
     try:
         if retrieval_chain is None:
-            return jsonify({"error": "RAG system not fully initialized. Please check backend logs."}), 500
+            return jsonify({"error": "RAG system not fully initialized. Please check backend logs.", "success": False}), 500
 
-        # Convert chat history for prompt
         messages = []
-        # Only include actual chat messages, not error messages from previous runs
         for msg in chat_history_data:
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant" and not msg.get("isError", False): # Exclude error messages
+            elif msg["role"] == "assistant" and not msg.get("isError", False):
                 messages.append(AIMessage(content=msg["content"]))
 
-        # Invoke the retrieval chain with current message and history
-        # The chain expects 'input' for the current query and 'chat_history'
         response = retrieval_chain.invoke({
             "input": user_message_content,
-            "chat_history": messages[:-1] # Exclude the current user message from chat_history passed to LLM
+            "chat_history": messages[:-1]
         })
 
         response_content = response["answer"]
@@ -441,42 +405,41 @@ def chat():
         assistant_response = {
             "response": response_content,
             "sources": sources,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.datetime.now().isoformat(),
+            "success": True
         }
 
-        # Add assistant message to history
         chat_history_data.append({"role": "assistant", "content": assistant_response["response"], "timestamp": assistant_response["timestamp"], "sources": assistant_response["sources"]})
         save_chat_history()
 
         return jsonify(assistant_response), 200
 
     except Exception as e:
-        print(f"Error during chat: {e}")
+        logger.error(f"Error during chat: {e}")
         error_message = f"An error occurred while processing your request: {e}. Please check the backend console."
-        # Add an error message to chat history
         chat_history_data.append({"role": "assistant", "content": error_message, "timestamp": datetime.datetime.now().isoformat(), "isError": True})
         save_chat_history()
-        return jsonify({"error": error_message}), 500
+        return jsonify({"error": error_message, "success": False}), 500
 
 @app.route('/chat_history', methods=['GET'])
 def get_chat_history():
-    return jsonify(chat_history_data), 200
+    return jsonify({"history": chat_history_data, "success": True}), 200
 
 @app.route('/clear_chat_history', methods=['POST'])
 def clear_chat_history():
     global chat_history_data
     chat_history_data = []
     save_chat_history()
-    return jsonify({"message": "Chat history cleared"}), 200
+    return jsonify({"message": "Chat history cleared", "success": True}), 200
 
 @app.route('/llm_settings', methods=['GET'])
 def get_llm_settings_api():
-    # Return current global settings
     return jsonify({
         "model": LLM_MODEL,
         "temperature": LLM_TEMPERATURE,
         "top_k": LLM_TOP_K,
-        "top_p": LLM_TOP_P
+        "top_p": LLM_TOP_P,
+        "success": True
     }), 200
 
 @app.route('/llm_settings', methods=['POST'])
@@ -489,15 +452,13 @@ def update_llm_settings_api():
     new_top_k = int(data.get('top_k', LLM_TOP_K))
     new_top_p = float(data.get('top_p', LLM_TOP_P))
 
-    # Validate inputs
     if not (0 <= new_temperature <= 2):
-        return jsonify({"error": "Temperature must be between 0 and 2"}), 400
-    if not (0 <= new_top_k <= 1000): # Increased max for top_k
-        return jsonify({"error": "Top K must be between 0 and 1000"}), 400
+        return jsonify({"error": "Temperature must be between 0 and 2", "success": False}), 400
+    if not (0 <= new_top_k <= 1000):
+        return jsonify({"error": "Top K must be between 0 and 1000", "success": False}), 400
     if not (0 <= new_top_p <= 1):
-        return jsonify({"error": "Top P must be between 0 and 1"}), 400
+        return jsonify({"error": "Top P must be between 0 and 1", "success": False}), 400
 
-    # Check if settings have actually changed
     if (new_model != LLM_MODEL or
         new_temperature != LLM_TEMPERATURE or
         new_top_k != LLM_TOP_K or
@@ -508,7 +469,6 @@ def update_llm_settings_api():
         LLM_TOP_K = new_top_k
         LLM_TOP_P = new_top_p
 
-        # Re-initialize the LLM with new settings
         try:
             llm = Ollama(
                 model=LLM_MODEL,
@@ -517,16 +477,24 @@ def update_llm_settings_api():
                 top_p=LLM_TOP_P,
                 base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434")
             )
-            # Recreate RAG chain with new LLM
             _create_rag_chain()
-            save_llm_settings() # Save updated settings to file
-            print(f"LLM settings updated: Model={LLM_MODEL}, Temp={LLM_TEMPERATURE}, TopK={LLM_TOP_K}, TopP={LLM_TOP_P}")
-            return jsonify({"message": "LLM settings updated successfully", "current_settings": {"model": LLM_MODEL, "temperature": LLM_TEMPERATURE, "top_k": LLM_TOP_K, "top_p": LLM_TOP_P}}), 200
+            save_llm_settings()
+            logger.info(f"LLM settings updated: Model={LLM_MODEL}, Temp={LLM_TEMPERATURE}, TopK={LLM_TOP_K}, TopP={LLM_TOP_P}")
+            return jsonify({
+                "message": "LLM settings updated successfully",
+                "current_settings": {
+                    "model": LLM_MODEL,
+                    "temperature": LLM_TEMPERATURE,
+                    "top_k": LLM_TOP_K,
+                    "top_p": LLM_TOP_P
+                },
+                "success": True
+            }), 200
         except Exception as e:
-            print(f"Error re-initializing LLM with new settings: {e}")
-            return jsonify({"error": f"Failed to update LLM settings: {str(e)}. Ensure model is available."}), 500
+            logger.error(f"Error re-initializing LLM with new settings: {e}")
+            return jsonify({"error": f"Failed to update LLM settings: {str(e)}. Ensure model is available.", "success": False}), 500
     else:
-        return jsonify({"message": "No changes to LLM settings"}), 200
+        return jsonify({"message": "No changes to LLM settings", "success": True}), 200
 
 @app.route('/ollama_models', methods=['GET'])
 def get_ollama_models():
@@ -534,19 +502,17 @@ def get_ollama_models():
     try:
         ollama_api_url = os.getenv("OLLAMA_HOST", "http://localhost:11434") + "/api/tags"
         response = requests.get(ollama_api_url)
-        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         models_data = response.json()
         model_names = [m['name'] for m in models_data.get('models', [])]
-        return jsonify({"models": model_names}), 200
+        return jsonify({"models": model_names, "success": True}), 200
     except requests.exceptions.ConnectionError:
-        return jsonify({"error": "Could not connect to Ollama. Is it running?"}), 500
+        return jsonify({"error": "Could not connect to Ollama. Is it running?", "success": False}), 500
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Error fetching Ollama models: {str(e)}"}), 500
+        return jsonify({"error": f"Error fetching Ollama models: {str(e)}", "success": False}), 500
     except Exception as e:
-        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
-
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}", "success": False}), 500
 
 # Run initialization when the app starts
 if __name__ == '__main__':
     initialize_rag_system()
-    app.run(debug=True) # debug=True allows auto-reloading and better error messages
