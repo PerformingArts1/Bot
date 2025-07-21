@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Ollama Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama_server
+    ports:
+      - "11434:11434" # Expose Ollama API port to host
+    volumes:
+      - ollama_data:/root/.ollama # Persist Ollama models and data
+    # IMPORTANT: These commands will run inside the container on startup.
+    # They will download the models if not present. This requires an internet connection.
+    # If models are already downloaded, these commands will be fast.
+    command: bash -c "ollama pull ${LLM_MODEL:-llama2} && ollama pull ${EMBEDDING_MODEL:-nomic-embed-text} && ollama serve"
+    restart: unless-stopped # Keep Ollama running
+
+  # Flask Backend Service
+  backend:
+    build:
+      context: ./backend # Points to your backend directory
+      dockerfile: Dockerfile
+    container_name: rag_backend
+    ports:
+      - "5000:5000" # Expose Flask API port to host
+    volumes:
+      - ./data:/app/data # Mount your local data directory into the container for persistence
+    env_file:
+      - ./.env # Load environment variables from project root .env
+    environment:
+      # Override OLLAMA_HOST to point to the ollama service within the Docker network
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      - ollama # Ensure Ollama starts before backend
+    restart: unless-stopped
+
+  # React Frontend Service
+  frontend:
+    build:
+      context: ./frontend # Points to your frontend directory
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    ports:
+      - "3000:80" # Map host port 3000 to container's Nginx port 80
+    environment:
+      # Pass API base URL to React build process
+      # This will be substituted in the React app at build time
+      REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:5000}
+    depends_on:
+      - backend # Ensure backend starts before frontend
+    restart: unless-stopped
+
+volumes:
+  ollama_data: # Define the named volume for Ollama persistence

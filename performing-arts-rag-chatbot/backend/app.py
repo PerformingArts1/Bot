@@ -1,373 +1,552 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+# app.py - Flask Backend for Local RAG System
 
-\f0\fs24 \cf0 # app.py - Conceptual Python Backend for AI Chatbot\
-\
-from flask import Flask, request, jsonify\
-from flask_cors import CORS\
-import PyPDF2 # For PDF text extraction\
-# import fitz # PyMuPDF - for more advanced PDF parsing and image extraction\
-# import io\
-# from PIL import Image # For image processing\
-# import pytesseract # For Tesseract OCR\
-# import numpy as np # For numerical operations, e.g., vector similarity\
-# from transformers import AutoTokenizer, AutoModel # For embedding models (e.g., Sentence Transformers)\
-# from llama_cpp import Llama # For local LLM (llama.cpp)\
-# import chromadb # For vector database (example)\
-# from shapely.geometry import Point, LineString, Polygon # For geometric operations\
-# import ezdxf # For DXF CAD file parsing\
-# import os\
-# import base64\
-# import requests # If using Ollama via its API\
-\
-app = Flask(__name__)\
-CORS(app) # Enable CORS for frontend communication\
-\
-# --- 1. Configuration ---\
-# You'll need to configure paths to your local models and data\
-# For a real setup, download a model like 'all-MiniLM-L6-v2' for embeddings\
-# and a GGUF model for Llama.cpp (e.g., Llama-3-8B-Instruct.Q4_K_M.gguf)\
-\
-# Placeholder for local LLM (replace with actual Llama.cpp/Ollama integration)\
-# LLM_MODEL_PATH = "./models/llama-3-8b-instruct.Q4_K_M.gguf"\
-# llm = Llama(model_path=LLM_MODEL_PATH, n_ctx=4096, n_gpu_layers=-1, verbose=False) # n_gpu_layers=-1 to offload all layers to GPU (MPS)\
-\
-# Placeholder for embedding model\
-# tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")\
-# model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")\
-\
-# Placeholder for vector database (in-memory for this demo)\
-# In a real app, you'd initialize ChromaDB, FAISS, etc.\
-# client = chromadb.Client()\
-# collection = client.get_or_create_collection(name="artscenter_knowledge_base")\
-\
-# Simplified in-memory "vector database" for demonstration\
-knowledge_base = [] # Stores \{'text': 'chunk', 'embedding': [0.1, 0.2, ...], 'source': 'filename', 'page': 'page_num'\}\
-\
-# --- 2. Document Processing Functions ---\
-\
-def extract_text_from_pdf(pdf_path):\
-    """\
-    Extracts text from a PDF file, including conceptual OCR for images within.\
-    Returns a list of (page_num, text_content) tuples.\
-    """\
-    extracted_pages_data = []\
-    try:\
-        # doc = fitz.open(pdf_path) # Using PyMuPDF for robust PDF handling\
-        # for page_num in range(doc.page_count):\
-        #     page = doc.load_page(page_num)\
-        #     page_text = page.get_text() # Extract text directly\
-\
-        #     # --- Conceptual Advanced Computer Vision (CV) for Image Data ---\
-        #     # This section would involve:\
-        #     # 1. Extracting images from the PDF page.\
-        #     # 2. Applying OCR to any text found within these images (e.g., labels, dimensions).\
-        #     # 3. Using object detection/semantic segmentation to identify elements (e.g., TVs, conduits, walls).\
-        #     # 4. Potentially converting vector graphics (if PDF is vector-based) into structured data.\
-        #     # 5. Generating textual descriptions of the visual content.\
-\
-        #     # pix = page.get_pixmap()\
-        #     # img_bytes = pix.tobytes("png")\
-        #     # img = Image.open(io.BytesIO(img_bytes))\
-        #     # ocr_text = pytesseract.image_to_string(img) # Requires Tesseract\
-        #     # page_text += f"\\n[OCR Content from Image: \{ocr_text\}]"\
-\
-        #     # Conceptual diagram analysis for spatial structure (using PyTorch/OpenCV)\
-        #     # detected_objects = process_diagram_for_objects(img) # Function to call CV models\
-        #     # page_text += f"\\n[Diagram Analysis: Detected objects: \{detected_objects\}]"\
-\
-        #     extracted_pages_data.append((page_num + 1, page_text)) # +1 for 1-based page numbers\
-\
-        # Using PyPDF2 for basic text extraction for demo purposes\
-        with open(pdf_path, 'rb') as file:\
-            reader = PyPDF2.PdfReader(file)\
-            for page_num in range(len(reader.pages)):\
-                page = reader.pages[page_num]\
-                page_text = page.extract_text() or ""\
-                extracted_pages_data.append((page_num + 1, page_text))\
-\
-    except Exception as e:\
-        print(f"Error extracting text from PDF \{pdf_path\}: \{e\}")\
-    return extracted_pages_data\
-\
-def chunk_text(text, chunk_size=500, overlap=50):\
-    """Splits text into smaller chunks with overlap."""\
-    chunks = []\
-    words = text.split()\
-    i = 0\
-    while i < len(words):\
-        chunk = " ".join(words[i:i + chunk_size])\
-        chunks.append(chunk)\
-        i += chunk_size - overlap\
-    return chunks\
-\
-# --- 3. Embedding Generation (Conceptual) ---\
-\
-def get_embedding(text):\
-    """\
-    Generates a conceptual embedding for a given text.\
-    In a real system, this would use a pre-trained embedding model (e.g., Sentence Transformers).\
-    """\
-    # Example using a placeholder for actual embedding model\
-    # inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)\
-    # with torch.no_grad():\
-    #     embeddings = model(**inputs).last_hidden_state.mean(dim=1).squeeze().tolist()\
-    # return embeddings\
-    # For demo, return a simple hash or mock vector\
-    return [hash(text) % 1000 / 1000.0] * 384 # Mock 384-dim vector (e.g., for all-MiniLM-L6-v2)\
-\
-# --- 4. RAG Logic ---\
-\
-def retrieve_relevant_chunks(query_embedding, top_k=3):\
-    """\
-    Retrieves the most relevant chunks from the knowledge base based on query embedding.\
-    In a real system, this would query the vector database using actual similarity metrics.\
-    """\
-    # In a real system, you'd calculate cosine similarity between query_embedding\
-    # (which would be a real vector from get_embedding) and all stored embeddings\
-    # in the knowledge_base (or vector DB).\
-    # For demonstration, we'll use simplified keyword matching on the raw query string.\
-\
-    query_lower = query_embedding.lower() # query_embedding is actually the raw query string for demo\
-\
-    relevant_chunks = []\
-    # Simplified keyword matching for demo purposes\
-    for item in knowledge_base:\
-        if any(keyword in item['text'].lower() for keyword in query_lower.split()):\
-            relevant_chunks.append(item['text'])\
-            if len(relevant_chunks) >= top_k:\
-                break\
-\
-    # Fallback to predefined chunks if no keyword match in demo knowledge_base\
-    if not relevant_chunks:\
-        if "power requirements" in query_lower:\
-            relevant_chunks = [\
-                "GENERAL NOTES: EACH TV LOCATION REQUIRES 20A 120VAC DUPLEX RECEPTACLE",\
-                "MOUNTING HEIGHT: RECEPTACLE HEIGHT 18 AFS., SWITCH HEIGHT - 48 AFF, TV HEIGHT 68AFF"\
-            ]\
-        elif "control room" in query_lower or "av-206" in query_lower:\
-            relevant_chunks = [\
-                "AV-206 CONTROL ROOM is located on the 3rd floor.",\
-                "Control Room: Central hub for audio, lighting, and stage management. Refer to AV231 for detailed device placements."\
-            ]\
-        elif "emergency" in query_lower:\
-            relevant_chunks = [\
-                "Emergency Exits & Procedures.pdf: Comprehensive guide for emergency evacuations and safety protocols.",\
-                "Fire Evacuation Protocol: Follow marked exit routes, proceed to assembly points, do not use elevators."\
-            ]\
-        elif "tv-321" in query_lower or "main hall" in query_lower:\
-            relevant_chunks = [\
-                "Device TV-321 is installed in the main hall.",\
-                "Main Hall: The primary performance space with tiered seating. Capacity: 850."\
-            ]\
-        elif "sp-310" in query_lower or "lobby" in query_lower:\
-             relevant_chunks = [\
-                "SP-310 and SP-311 are speakers in the lobby area.",\
-                "Lobby: Main entrance, ticket counter, and concession area."\
-            ]\
-        elif "dimensions" in query_lower or "layout" in query_lower or "floor plan" in query_lower or "conduit" in query_lower:\
-            # --- Conceptual Geospatial/CAD Processing Integration ---\
-            # This is where a specialized module would be called to interpret the drawing.\
-            # For example, if you had a structured representation of the CAD data:\
-            # spatial_data = parse_cad_data("path/to/your/AV231.dxf")\
-            # inferred_info = spatial_reasoning_module(query_lower, spatial_data)\
-            # relevant_chunks.append(f"Inferred spatial info: \{inferred_info\}")\
-            relevant_chunks = [\
-                "The AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf contains detailed layouts and dimensions for AV devices and conduit paths.",\
-                "While direct geometric interpretation is complex, the document specifies device locations like AV-206 (Control Room) and TV-321 (Main Hall), and details conduit sizes and runs.",\
-                "For precise measurements and spatial relationships, you would need to process the original CAD files (e.g., DXF) using libraries like `ezdxf` and `shapely`."\
-            ]\
-\
-    return relevant_chunks\
-\
-def generate_response_with_llm(query, context_chunks, image_description=None):\
-    """\
-    Generates a response using the local LLM, augmented with context.\
-    Includes conceptual handling for multimodal input.\
-    """\
-    context = "\\n".join(context_chunks)\
-\
-    # --- Conceptual Multimodal LLM Integration (for generation) ---\
-    # If a Vision LLM described the image, that description would be passed here\
-    # to help the main LLM generate a more informed response.\
-    image_context = f"\\nUser provided an image with content: \{image_description\}\\n" if image_description else ""\
-\
-    prompt = f"""\
-    You are an AI assistant for a performing arts center. Use the following information\
-    to answer the user's question. If the information is not sufficient, state that.\
-\
-    Context from documents:\{image_context\}\
-    \{context\}\
-\
-    User Question: \{query\}\
-\
-    AI Assistant:\
-    """\
-    print(f"Sending prompt to LLM:\\n\{prompt\}")\
-\
-    # Placeholder for actual LLM inference using llama-cpp-python or Ollama\
-    # If using llama-cpp-python with a multimodal GGUF model (e.g., LLaVA):\
-    # You would pass the image data directly to the LLM call along with the text prompt.\
-    # The exact API varies by model/wrapper.\
-    # output = llm(\
-    #     prompt,\
-    #     max_tokens=1024,\
-    #     stop=["User:", "\\n"], # Adjust stop tokens based on model\
-    #     echo=False,\
-    #     temperature=0.7,\
-    #     # images=[image_data_bytes] # If your LLM supports direct image input\
-    # )\
-    # return output["choices"][0]["text"].strip()\
-\
-    # If using Ollama (via requests to local Ollama server):\
-    # payload = \{"model": "llava", "prompt": prompt\}\
-    # if image_description: # If image was provided, include it for Ollama\
-    #     payload["images"] = [base64_image_data_from_frontend] # You'd need to pass this through\
-    # response = requests.post("http://localhost:11434/api/generate", json=payload)\
-    # result = response.json()\
-    # return result['response']\
-\
-\
-    # Simulated LLM response for demonstration\
-    if not context_chunks and not image_description:\
-        return "I don't have specific information on that topic in my knowledge base. Could you please provide more details or ask about something else?"\
-    else:\
-        response_prefix = "Based on the documents"\
-        if image_description:\
-            response_prefix += f" and the image you provided (conceptually processed)"\
-        return f"\{response_prefix\}, regarding '\{query\}', I found: \{context\}. How else can I help?"\
-\
-# --- 5. API Endpoints ---\
-\
-@app.route('/ingest_document', methods=['POST'])\
-def ingest_document():\
-    """\
-    Endpoint to ingest a new PDF document into the knowledge base.\
-    In a real system, this would process the file, chunk it, embed it, and store in DB.\
-    """\
-    if 'file' not in request.files:\
-        return jsonify(\{"error": "No file part"\}), 400\
-    file = request.files['file']\
-    if file.filename == '':\
-        return jsonify(\{"error": "No selected file"\}), 400\
-    if file and file.filename.endswith('.pdf'):\
-        # Save the file temporarily\
-        filepath = os.path.join("/tmp", file.filename) # Use a temporary path\
-        file.save(filepath)\
-\
-        # Process the PDF, including conceptual image/diagram analysis\
-        pages_data = extract_text_from_pdf(filepath)\
-        total_chunks_added = 0\
-        for page_num, page_text in pages_data:\
-            chunks = chunk_text(page_text)\
-            for chunk in chunks:\
-                embedding = get_embedding(chunk)\
-                knowledge_base.append(\{'text': chunk, 'embedding': embedding, 'source': file.filename, 'page': page_num\})\
-                # In a real system: collection.add(documents=[chunk], embeddings=[embedding], metadatas=[\{'source': file.filename, 'page': page_num\}])\
-                total_chunks_added += 1\
-\
-        os.remove(filepath) # Clean up temp file\
-        return jsonify(\{"message": f"Document '\{file.filename\}' ingested successfully. \{total_chunks_added\} chunks added."\}), 200\
-    return jsonify(\{"error": "Invalid file type. Only PDFs are supported for ingestion."\}), 400\
-\
-@app.route('/chat', methods=['POST'])\
-def chat():\
-    """\
-    Endpoint for AI chatbot interaction.\
-    Handles text queries and conceptual image queries.\
-    """\
-    data = request.json\
-    user_query = data.get('query', '')\
-    image_data_b64 = data.get('image', None) # Base64 image data from frontend\
-\
-    image_description = None\
-    if image_data_b64:\
-        # --- Conceptual Multimodal Query Fusion (Image Understanding) ---\
-        # 1. Decode base64 image\
-        # image_bytes = base64.b64decode(image_data_b64)\
-        # 2. Use a Vision LLM (e.g., LLaVA via llama-cpp-python or Ollama) or specialized CV model\
-        #    to describe the image content. This description is then used to augment the user's text query.\
-        # Example:\
-        # If using llama-cpp-python with a multimodal model:\
-        # vision_llm_output = llm.generate_image_description(image_bytes) # Conceptual API\
-        # image_description = vision_llm_output.get('description', 'an unspecified diagram or image')\
-        #\
-        # If using Ollama:\
-        # ollama_payload = \{"model": "llava", "prompt": "Describe this image.", "images": [image_data_b64]\}\
-        # ollama_response = requests.post("http://localhost:11434/api/generate", json=ollama_payload)\
-        # ollama_result = ollama_response.json()\
-        # image_description = ollama_result.get('response', 'an unspecified diagram or image')\
-\
-        print("Received image data. Conceptual image processing for multimodal query fusion would happen here.")\
-        image_description = "a technical diagram or floor plan" # Simulated description for demo\
-        # user_query = f"\{user_query\} (User provided an image, conceptually processed as: \{image_description\})"\
-        # For simplicity in demo, we'll just pass image_description to generate_response_with_llm\
-\
-    if not user_query and not image_data_b64: # After potential image processing, ensure there's a query\
-        return jsonify(\{"error": "No query provided after image processing"\}), 400\
-\
-    # 1. Get embedding for the user query (now potentially augmented by image description)\
-    # In a real system, query_embedding would be a vector from get_embedding(user_query + image_description)\
-    query_embedding = user_query # Still using raw query string for simplified demo retrieval\
-\
-    # 2. Retrieve relevant context chunks\
-    # This step would leverage the embedding model and vector DB for actual similarity search.\
-    relevant_chunks = retrieve_relevant_chunks(query_embedding)\
-\
-    # 3. Generate response using LLM with context (and image description if present)\
-    ai_response = generate_response_with_llm(user_query, relevant_chunks, image_description)\
-\
-    return jsonify(\{"response": ai_response\}), 200\
-\
-@app.route('/emergency_protocols', methods=['GET'])\
-def get_emergency_protocols():\
-    """\
-    Endpoint to retrieve emergency protocols.\
-    In a real system, these would also be managed via RAG or a structured DB.\
-    """\
-    protocols = [\
-        \{"title": "Fire Evacuation", "content": "Follow marked exit routes, proceed to assembly points, do not use elevators."\},\
-        \{"title": "Medical Emergency", "content": "Call 911, notify nearest staff, provide first aid if trained, secure area."\},\
-        \{"title": "Power Outage", "content": "Remain calm, wait for instructions, emergency lighting will activate."\},\
-        \{"title": "Security Threat", "content": "Run, Hide, Fight. Follow instructions from security personnel or law enforcement."\},\
-    ]\
-    return jsonify(\{"protocols": protocols\}), 200\
-\
-if __name__ == '__main__':\
-    # For demonstration, let's ingest a conceptual PDF content\
-    # In a real scenario, you'd have a separate script or admin interface for ingestion\
-    conceptual_pdf_content = """\
-    AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf\
-    GENERAL NOTES: EACH TV LOCATION REQUIRES 20A 120VAC DUPLEX RECEPTACLE.\
-    CONTROL ROOM (AV-206) is located on the 3rd floor.\
-    MOUNTING HEIGHT: RECEPTACLE HEIGHT 18 AFS., SWITCH HEIGHT - 48 AFF, TV HEIGHT 68AFF.\
-    Refer to AV-300 and AV-900 sheets for DISPLAY ELEVATIONS AND MOUNTING DETAILS.\
-    Device TV-321 is installed in the main hall.\
-    SP-310 and SP-311 are speakers in the lobby area.\
-    Emergency exits are clearly marked on all floor plans.\
-    The drawing also contains detailed conduit paths and dimensions for cabling.\
-    There are multiple junction boxes (e.g., 12x12x4, 16x16x6) indicated for various connections.\
-    """\
-    print("Ingesting conceptual PDF content into knowledge base...")\
-    # Simulate processing of a multi-page PDF with some visual info\
-    conceptual_pages = [\
-        (1, "Page 1: " + conceptual_pdf_content),\
-        (2, "Page 2: This page shows the detailed conduit paths and specific device connections for AV-206 (Control Room) and TV-321. It includes dimensions for conduit runs and junction box placements. There is a CHANGE OF CONDUIT PATH TO AV-308."),\
-        (3, "Page 3: This page focuses on the device legend, detailing symbols for various junction boxes (1-gang, 2-gang, 3-gang, 16x6x4, 8x8x4, 12x12x4, 14x14x4, 16x16x6). It also has notes on equipment rack elevations and an AV CABLE SCHEDULE."),\
-    ]\
-\
-    total_chunks = 0\
-    for page_num, page_content in conceptual_pages:\
-        chunks_to_ingest = chunk_text(page_content, chunk_size=100, overlap=20)\
-        for chunk in chunks_to_ingest:\
-            knowledge_base.append(\{'text': chunk, 'embedding': get_embedding(chunk), 'source': 'AV231_ DEVICE PLACEMENTS 3RD FLOOR PLAN Rev.6 markup (1).pdf', 'page': page_num\})\
-            total_chunks += 1\
-    print(f"Conceptual knowledge base initialized with \{total_chunks\} chunks.")\
-\
-    # Run the Flask app\
-    app.run(host='0.0.0.0', port=5000, debug=True)\
-}
+import os
+import json
+import uuid
+import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+# Import Ollama and other necessary libraries from Langchain
+from langchain_community.llms import Ollama
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.documents import Document as LangchainDocument # Alias to avoid conflict
+
+# Import unstructured for document parsing
+from unstructured.partition.auto import partition
+
+# Import requests for direct Ollama API calls (e.g., listing models)
+import requests
+
+# Load environment variables from .env file
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app) # Enable CORS for all routes
+
+# --- Configuration ---
+DATA_DIR = 'data'
+UPLOAD_FOLDER = os.path.join(DATA_DIR, 'documents')
+PERSIST_DIRECTORY = os.path.join(DATA_DIR, 'chroma_db')
+TINYDB_DIR = os.path.join(DATA_DIR, 'tinydb')
+
+# Ensure all necessary directories exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
+os.makedirs(TINYDB_DIR, exist_ok=True)
+
+# File paths for persistence
+CHAT_HISTORY_FILE = os.path.join(TINYDB_DIR, 'chat_history.json')
+DOCUMENTS_METADATA_FILE = os.path.join(TINYDB_DIR, 'documents_metadata.json')
+LLM_SETTINGS_FILE = os.path.join(TINYDB_DIR, 'llm_settings.json')
+
+
+# --- Global Variables for RAG System ---
+# Initialize LLM and Embeddings (default to Llama2 and Nomic-embed-text)
+# These will be updated by settings from the frontend
+LLM_MODEL = os.getenv("LLM_MODEL", "llama2")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.7))
+LLM_TOP_K = int(os.getenv("LLM_TOP_K", 40))
+LLM_TOP_P = float(os.getenv("LLM_TOP_P", 0.9))
+
+llm = None # Will be initialized in initialize_rag_system
+embeddings = None # Will be initialized in initialize_rag_system
+vectorstore = None
+retrieval_chain = None # The main RAG chain
+
+chat_history_data = [] # Stores chat messages (in-memory, also persisted to file)
+documents_metadata = {} # Stores metadata about uploaded documents {doc_id: {filename, path, upload_date, num_chunks}}
+
+
+# --- Persistence Functions ---
+
+def load_documents_metadata():
+    """Loads document metadata from a JSON file."""
+    global documents_metadata
+    if os.path.exists(DOCUMENTS_METADATA_FILE):
+        try:
+            with open(DOCUMENTS_METADATA_FILE, 'r') as f:
+                documents_metadata = json.load(f)
+            print(f"Loaded {len(documents_metadata)} document metadata entries.")
+        except json.JSONDecodeError:
+            print(f"Warning: {DOCUMENTS_METADATA_FILE} is corrupted or empty. Starting with empty metadata.")
+            documents_metadata = {}
+    else:
+        documents_metadata = {}
+        print("No existing document metadata found.")
+
+def save_documents_metadata():
+    """Saves document metadata to a JSON file."""
+    with open(DOCUMENTS_METADATA_FILE, 'w') as f:
+        json.dump(documents_metadata, f, indent=4)
+    print("Document metadata saved.")
+
+def load_chat_history():
+    """Loads chat history from a JSON file."""
+    global chat_history_data
+    if os.path.exists(CHAT_HISTORY_FILE):
+        try:
+            with open(CHAT_HISTORY_FILE, 'r') as f:
+                chat_history_data = json.load(f)
+            print(f"Loaded {len(chat_history_data)} chat history entries.")
+        except json.JSONDecodeError:
+            print(f"Warning: {CHAT_HISTORY_FILE} is corrupted or empty. Starting with empty chat history.")
+            chat_history_data = []
+    else:
+        chat_history_data = []
+        print("No existing chat history found.")
+
+def save_chat_history():
+    """Saves chat history to a JSON file."""
+    with open(CHAT_HISTORY_FILE, 'w') as f:
+        json.dump(chat_history_data, f, indent=4)
+    print("Chat history saved.")
+
+def load_llm_settings():
+    """Loads LLM settings from a JSON file."""
+    global LLM_MODEL, LLM_TEMPERATURE, LLM_TOP_K, LLM_TOP_P
+    if os.path.exists(LLM_SETTINGS_FILE):
+        try:
+            with open(LLM_SETTINGS_FILE, 'r') as f:
+                loaded_settings = json.load(f)
+                LLM_MODEL = loaded_settings.get('model', LLM_MODEL)
+                LLM_TEMPERATURE = loaded_settings.get('temperature', LLM_TEMPERATURE)
+                LLM_TOP_K = loaded_settings.get('top_k', LLM_TOP_K)
+                LLM_TOP_P = loaded_settings.get('top_p', LLM_TOP_P)
+            print("LLM settings loaded.")
+        except json.JSONDecodeError:
+            print(f"Warning: {LLM_SETTINGS_FILE} is corrupted or empty. Using default LLM settings.")
+            save_llm_settings() # Save defaults if file is bad
+    else:
+        save_llm_settings() # Save default settings if file doesn't exist
+
+def save_llm_settings():
+    """Saves current LLM settings to a JSON file."""
+    settings_to_save = {
+        "model": LLM_MODEL,
+        "temperature": LLM_TEMPERATURE,
+        "top_k": LLM_TOP_K,
+        "top_p": LLM_TOP_P
+    }
+    with open(LLM_SETTINGS_FILE, 'w') as f:
+        json.dump(settings_to_save, f, indent=4)
+    print("LLM settings saved.")
+
+# --- RAG System Initialization and Updates ---
+
+def initialize_rag_system():
+    """Initializes LLM, Embeddings, Vector Store, and RAG chain."""
+    global llm, embeddings, vectorstore, retrieval_chain
+
+    # Load persistent data
+    load_llm_settings() # Load settings first to configure LLM
+    load_documents_metadata()
+    load_chat_history()
+
+    # Initialize LLM and Embeddings based on loaded settings
+    try:
+        llm = Ollama(
+            model=LLM_MODEL,
+            temperature=LLM_TEMPERATURE,
+            top_k=LLM_TOP_K,
+            top_p=LLM_TOP_P,
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434") # Use OLLAMA_HOST from .env
+        )
+        embeddings = OllamaEmbeddings(
+            model=EMBEDDING_MODEL,
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434") # Use OLLAMA_HOST from .env
+        )
+        print(f"LLM initialized: {LLM_MODEL}, Embeddings initialized: {EMBEDDING_MODEL}")
+    except Exception as e:
+        print(f"CRITICAL ERROR: Could not initialize Ollama LLM or Embeddings. Is Ollama running and models pulled? Error: {e}")
+        llm = None # Set to None to indicate failure
+        embeddings = None
+        # Do not return here, allow the app to start but with limited functionality
+        # Endpoints will check for llm/embeddings being None
+
+    # Initialize or load ChromaDB
+    try:
+        vectorstore = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
+        print(f"Loaded ChromaDB from {PERSIST_DIRECTORY}")
+    except Exception as e:
+        print(f"Could not load ChromaDB, creating a new one. Error: {e}")
+        vectorstore = Chroma(embedding_function=embeddings, persist_directory=PERSIST_DIRECTORY)
+        vectorstore.persist()
+        print(f"Created new ChromaDB at {PERSIST_DIRECTORY}")
+
+    # Create the RAG chain
+    _create_rag_chain()
+    print("RAG system initialized.")
+
+def _create_rag_chain():
+    """Creates or re-creates the RAG retrieval chain."""
+    global retrieval_chain, llm, vectorstore
+
+    if llm is None or vectorstore is None:
+        print("Cannot create RAG chain: LLM or Vectorstore not initialized. RAG functionality will be limited.")
+        retrieval_chain = None
+        return
+
+    # Define the prompt template for the LLM
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant. Answer the user's questions based on the provided context. If you don't know the answer, just say that you don't know, don't try to make up an answer. Provide sources for your answers, referencing the original filename, chunk index, and document ID."),
+        ("placeholder", "{chat_history}"), # Placeholder for chat history
+        ("human", "{input}"), # User's current question
+    ])
+
+    # Create the document chain (combines retrieved documents with the prompt)
+    document_chain = create_stuff_documents_chain(llm, prompt)
+
+    # Create the retriever from the vector store
+    retriever = vectorstore.as_retriever()
+
+    # Create the full retrieval chain
+    retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    print("RAG retrieval chain created.")
+
+
+# --- API Endpoints ---
+
+@app.route('/')
+def index():
+    return "Local RAG System Backend is running!"
+
+@app.route('/upload_document', methods=['POST'])
+def upload_document():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    if file:
+        original_filename = secure_filename(file.filename)
+        document_id = str(uuid.uuid4()) # Generate a unique ID for the document
+        file_extension = os.path.splitext(original_filename)[1].lower()
+        # Create a unique filename on disk to avoid conflicts
+        filename_on_disk = f"{document_id}{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename_on_disk)
+        file.save(filepath)
+
+        try:
+            # Use unstructured.io to parse the document content
+            elements = partition(filename=filepath)
+            
+            # Convert elements to Langchain Document objects
+            # We'll use RecursiveCharacterTextSplitter for chunking
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            
+            langchain_docs = []
+            for i, element in enumerate(elements):
+                if element.text.strip():
+                    # Split the element text into smaller chunks if it's too long
+                    # This ensures smaller, more manageable chunks for the vector store
+                    sub_chunks = text_splitter.split_text(element.text)
+                    for j, sub_chunk_text in enumerate(sub_chunks):
+                        doc = LangchainDocument(
+                            page_content=sub_chunk_text,
+                            metadata={
+                                "document_id": document_id,
+                                "original_filename": original_filename,
+                                "chunk_index": f"{i}-{j}", # Combine element index and sub-chunk index
+                                "source_type": element.category # e.g., 'Title', 'NarrativeText'
+                            }
+                        )
+                        langchain_docs.append(doc)
+
+            if not langchain_docs:
+                os.remove(filepath) # Clean up if no documents were loaded
+                return jsonify({"error": "Could not extract content from document. Ensure it's a supported format (PDF, TXT, DOCX, etc.) and not empty."}), 500
+
+            # Add documents to the vectorstore
+            global vectorstore
+            if vectorstore is None: # Should be initialized, but fallback
+                initialize_rag_system() # Attempt to re-initialize if it failed earlier
+
+            if vectorstore:
+                vectorstore.add_documents(langchain_docs)
+                vectorstore.persist() # Persist changes to disk
+            else:
+                os.remove(filepath)
+                return jsonify({"error": "Vector store not initialized. Cannot index document."}), 500
+
+            # Store metadata
+            documents_metadata[document_id] = {
+                "original_filename": original_filename,
+                "filename_on_disk": filename_on_disk, # Store the name used on disk
+                "filepath": filepath, # Full path to the file
+                "upload_date": datetime.datetime.now().isoformat(),
+                "num_chunks": len(langchain_docs) # Number of elements/chunks processed
+            }
+            save_documents_metadata()
+
+            # Recreate RAG chain to ensure it uses the latest vectorstore state
+            _create_rag_chain()
+
+            return jsonify({
+                "message": "Document uploaded and processed successfully",
+                "id": document_id,
+                "original_filename": original_filename,
+                "num_chunks": len(langchain_docs)
+            }), 200
+        except Exception as e:
+            os.remove(filepath) # Clean up partially processed file
+            print(f"Error processing document: {e}")
+            return jsonify({"error": f"Error processing document: {e}. Check backend console for details."}), 500
+
+@app.route('/documents', methods=['GET'])
+def get_documents():
+    search_query = request.args.get('query', '').lower()
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 5)) # Default limit to 5, matches frontend
+
+    # Convert documents_metadata dict to a list for filtering and sorting
+    all_docs = []
+    for doc_id, meta in documents_metadata.items():
+        doc_info = meta.copy()
+        doc_info['id'] = doc_id
+        all_docs.append(doc_info)
+
+    # Apply search filter
+    if search_query:
+        filtered_docs = [
+            doc for doc in all_docs
+            if search_query in doc['original_filename'].lower()
+        ]
+    else:
+        filtered_docs = all_docs
+
+    # Sort documents by upload date (newest first)
+    filtered_docs.sort(key=lambda x: x['upload_date'], reverse=True)
+
+    total_documents = len(filtered_docs)
+    
+    # Apply pagination
+    start_index = (page - 1) * limit
+    end_index = start_index + limit
+    paginated_docs = filtered_docs[start_index:end_index]
+
+    return jsonify({
+        "documents": paginated_docs,
+        "total_documents": total_documents,
+        "page": page,
+        "limit": limit
+    }), 200
+
+@app.route('/delete_document/<document_id>', methods=['DELETE'])
+def delete_document(document_id):
+    if document_id not in documents_metadata:
+        return jsonify({"error": "Document not found"}), 404
+
+    doc_info = documents_metadata[document_id]
+    filepath = doc_info['filepath']
+
+    try:
+        # Delete document from ChromaDB by its document_id
+        global vectorstore
+        if vectorstore:
+            # Langchain's Chroma.delete() method accepts a where clause for metadata filtering
+            vectorstore.delete(where={"document_id": document_id})
+            vectorstore.persist() # Persist changes
+            print(f"Deleted chunks for document {document_id} from ChromaDB.")
+        else:
+            print("Vectorstore not initialized, cannot delete chunks from ChromaDB.")
+
+        # Delete the file from the upload folder
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"Deleted file: {filepath}")
+
+        # Remove from our metadata tracking
+        del documents_metadata[document_id]
+        save_documents_metadata()
+
+        # Recreate RAG chain to ensure it uses the latest vectorstore state
+        _create_rag_chain()
+
+        return jsonify({"message": "Document deleted successfully"}), 200
+    except Exception as e:
+        print(f"Error deleting document {document_id}: {e}")
+        return jsonify({"error": f"Failed to delete document: {str(e)}"}), 500
+
+@app.route('/preview_extracted_text/<document_id>', methods=['GET'])
+def preview_extracted_text(document_id):
+    if document_id not in documents_metadata:
+        return jsonify({"error": "Document not found"}), 404
+
+    filepath = documents_metadata[document_id]['filepath']
+    if not os.path.exists(filepath):
+        return jsonify({"error": "Document file not found on server"}), 404
+
+    try:
+        # Read the entire content of the file
+        # For larger files, consider streaming or reading in chunks
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({"content": content}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to read document content: {str(e)}"}), 500
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_message_content = data.get('message')
+    if not user_message_content:
+        return jsonify({"error": "No message provided"}), 400
+
+    # Add user message to history
+    chat_history_data.append({"role": "user", "content": user_message_content, "timestamp": datetime.datetime.now().isoformat()})
+    save_chat_history()
+
+    try:
+        if retrieval_chain is None:
+            return jsonify({"error": "RAG system not fully initialized. Please check backend logs."}), 500
+
+        # Convert chat history for prompt
+        messages = []
+        # Only include actual chat messages, not error messages from previous runs
+        for msg in chat_history_data:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant" and not msg.get("isError", False): # Exclude error messages
+                messages.append(AIMessage(content=msg["content"]))
+
+        # Invoke the retrieval chain with current message and history
+        # The chain expects 'input' for the current query and 'chat_history'
+        response = retrieval_chain.invoke({
+            "input": user_message_content,
+            "chat_history": messages[:-1] # Exclude the current user message from chat_history passed to LLM
+        })
+
+        response_content = response["answer"]
+        sources = []
+        if "context" in response:
+            for doc in response["context"]:
+                source_info = {
+                    "original_filename": doc.metadata.get("original_filename", "N/A"),
+                    "chunk_index": doc.metadata.get("chunk_index", "N/A"),
+                    "document_id": doc.metadata.get("document_id", "N/A"),
+                    "snippet": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+                }
+                sources.append(source_info)
+
+        assistant_response = {
+            "response": response_content,
+            "sources": sources,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+
+        # Add assistant message to history
+        chat_history_data.append({"role": "assistant", "content": assistant_response["response"], "timestamp": assistant_response["timestamp"], "sources": assistant_response["sources"]})
+        save_chat_history()
+
+        return jsonify(assistant_response), 200
+
+    except Exception as e:
+        print(f"Error during chat: {e}")
+        error_message = f"An error occurred while processing your request: {e}. Please check the backend console."
+        # Add an error message to chat history
+        chat_history_data.append({"role": "assistant", "content": error_message, "timestamp": datetime.datetime.now().isoformat(), "isError": True})
+        save_chat_history()
+        return jsonify({"error": error_message}), 500
+
+@app.route('/chat_history', methods=['GET'])
+def get_chat_history():
+    return jsonify(chat_history_data), 200
+
+@app.route('/clear_chat_history', methods=['POST'])
+def clear_chat_history():
+    global chat_history_data
+    chat_history_data = []
+    save_chat_history()
+    return jsonify({"message": "Chat history cleared"}), 200
+
+@app.route('/llm_settings', methods=['GET'])
+def get_llm_settings_api():
+    # Return current global settings
+    return jsonify({
+        "model": LLM_MODEL,
+        "temperature": LLM_TEMPERATURE,
+        "top_k": LLM_TOP_K,
+        "top_p": LLM_TOP_P
+    }), 200
+
+@app.route('/llm_settings', methods=['POST'])
+def update_llm_settings_api():
+    global LLM_MODEL, LLM_TEMPERATURE, LLM_TOP_K, LLM_TOP_P, llm
+
+    data = request.json
+    new_model = data.get('model', LLM_MODEL)
+    new_temperature = float(data.get('temperature', LLM_TEMPERATURE))
+    new_top_k = int(data.get('top_k', LLM_TOP_K))
+    new_top_p = float(data.get('top_p', LLM_TOP_P))
+
+    # Validate inputs
+    if not (0 <= new_temperature <= 2):
+        return jsonify({"error": "Temperature must be between 0 and 2"}), 400
+    if not (0 <= new_top_k <= 1000): # Increased max for top_k
+        return jsonify({"error": "Top K must be between 0 and 1000"}), 400
+    if not (0 <= new_top_p <= 1):
+        return jsonify({"error": "Top P must be between 0 and 1"}), 400
+
+    # Check if settings have actually changed
+    if (new_model != LLM_MODEL or
+        new_temperature != LLM_TEMPERATURE or
+        new_top_k != LLM_TOP_K or
+        new_top_p != LLM_TOP_P):
+
+        LLM_MODEL = new_model
+        LLM_TEMPERATURE = new_temperature
+        LLM_TOP_K = new_top_k
+        LLM_TOP_P = new_top_p
+
+        # Re-initialize the LLM with new settings
+        try:
+            llm = Ollama(
+                model=LLM_MODEL,
+                temperature=LLM_TEMPERATURE,
+                top_k=LLM_TOP_K,
+                top_p=LLM_TOP_P,
+                base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            )
+            # Recreate RAG chain with new LLM
+            _create_rag_chain()
+            save_llm_settings() # Save updated settings to file
+            print(f"LLM settings updated: Model={LLM_MODEL}, Temp={LLM_TEMPERATURE}, TopK={LLM_TOP_K}, TopP={LLM_TOP_P}")
+            return jsonify({"message": "LLM settings updated successfully", "current_settings": {"model": LLM_MODEL, "temperature": LLM_TEMPERATURE, "top_k": LLM_TOP_K, "top_p": LLM_TOP_P}}), 200
+        except Exception as e:
+            print(f"Error re-initializing LLM with new settings: {e}")
+            return jsonify({"error": f"Failed to update LLM settings: {str(e)}. Ensure model is available."}), 500
+    else:
+        return jsonify({"message": "No changes to LLM settings"}), 200
+
+@app.route('/ollama_models', methods=['GET'])
+def get_ollama_models():
+    """Fetches a list of available Ollama models using direct API call."""
+    try:
+        ollama_api_url = os.getenv("OLLAMA_HOST", "http://localhost:11434") + "/api/tags"
+        response = requests.get(ollama_api_url)
+        response.raise_for_status() # Raise an HTTPError for bad responses (4xx or 5xx)
+        models_data = response.json()
+        model_names = [m['name'] for m in models_data.get('models', [])]
+        return jsonify({"models": model_names}), 200
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "Could not connect to Ollama. Is it running?"}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Error fetching Ollama models: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+# Run initialization when the app starts
+if __name__ == '__main__':
+    initialize_rag_system()
+    app.run(debug=True) # debug=True allows auto-reloading and better error messages
