@@ -1,0 +1,43 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red202\green202\blue202;\red23\green24\blue24;\red54\green192\blue160;
+\red113\green192\blue131;\red109\green115\blue120;}
+{\*\expandedcolortbl;;\cssrgb\c83137\c83137\c83137;\cssrgb\c11765\c12157\c12549;\cssrgb\c23922\c78824\c69020;
+\cssrgb\c50588\c78824\c58431;\cssrgb\c50196\c52549\c54510;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs28 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2     \cf4 \cb3 \strokec4 version\cf2 \cb3 \strokec2 : \cf5 \strokec5 '3.8'\cf2 \cb1 \strokec2 \
+\
+\cb3     \cf4 \cb3 \strokec4 services\cf2 \cb3 \strokec2 :\cb1 \
+\cb3       \cf4 \cb3 \strokec4 frontend\cf2 \cb3 \strokec2 :\cb1 \
+\cb3         \cf4 \cb3 \strokec4 build\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           \cf4 \cb3 \strokec4 context\cf2 \cb3 \strokec2 : \cf5 \strokec5 ./frontend\cf2 \cb1 \strokec2 \
+\cb3           \cf4 \cb3 \strokec4 dockerfile\cf2 \cb3 \strokec2 : \cf5 \strokec5 Dockerfile.frontend\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 ports\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           - \cf5 \strokec5 "80:80"\cf2 \strokec2  \cf6 \strokec6 # Map host port 80 to container port 80 (Nginx)\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 depends_on\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           - \cf5 \strokec5 backend\cf2 \strokec2  \cf6 \strokec6 # Ensure backend starts before frontend\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # Environment variables for Firebase config, auth token, and app ID\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # These are placeholders; in a real Canvas environment, these would be injected.\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 environment\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           \cf4 \cb3 \strokec4 __firebase_config\cf2 \cb3 \strokec2 : \cf5 \strokec5 '\{"apiKey": "YOUR_FIREBASE_API_KEY", "authDomain": "YOUR_FIREBASE_AUTH_DOMAIN", "projectId": "YOUR_FIREBASE_PROJECT_ID", "storageBucket": "YOUR_FIREBASE_STORAGE_BUCKET", "messagingSenderId": "YOUR_FIREBASE_MESSAGING_SENDER_ID", "appId": "YOUR_FIREBASE_APP_ID", "measurementId": "YOUR_FIREBASE_MEASUREMENT_ID"\}'\cf2 \cb1 \strokec2 \
+\cb3           \cf4 \cb3 \strokec4 __initial_auth_token\cf2 \cb3 \strokec2 : \cf5 \strokec5 'YOUR_FIREBASE_CUSTOM_AUTH_TOKEN'\cf2 \strokec2  \cf6 \strokec6 # Optional: if using custom tokens\cf2 \cb1 \strokec2 \
+\cb3           \cf4 \cb3 \strokec4 __app_id\cf2 \cb3 \strokec2 : \cf5 \strokec5 'your-unique-app-id'\cf2 \strokec2  \cf6 \strokec6 # Replace with your actual app ID\cf2 \cb1 \strokec2 \
+\
+\cb3       \cf4 \cb3 \strokec4 backend\cf2 \cb3 \strokec2 :\cb1 \
+\cb3         \cf4 \cb3 \strokec4 build\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           \cf4 \cb3 \strokec4 context\cf2 \cb3 \strokec2 : \cf5 \strokec5 ./backend\cf2 \cb1 \strokec2 \
+\cb3           \cf4 \cb3 \strokec4 dockerfile\cf2 \cb3 \strokec2 : \cf5 \strokec5 Dockerfile.backend\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 ports\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           - \cf5 \strokec5 "5000:5000"\cf2 \strokec2  \cf6 \strokec6 # Expose backend port (optional, as frontend proxies)\cf2 \cb1 \strokec2 \
+\cb3         \cf4 \cb3 \strokec4 environment\cf2 \cb3 \strokec2 :\cb1 \
+\cb3           \cf4 \cb3 \strokec4 GOOGLE_API_KEY\cf2 \cb3 \strokec2 : \cf5 \strokec5 "YOUR_GOOGLE_API_KEY"\cf2 \strokec2  \cf6 \strokec6 # Replace with your actual Google API Key\cf2 \cb1 \strokec2 \
+\cb3           \cf4 \cb3 \strokec4 PRIMARY_BACKEND_API_KEY\cf2 \cb3 \strokec2 : \cf5 \strokec5 "your_backend_api_key_here"\cf2 \strokec2  \cf6 \strokec6 # This key must match in RagContext.js\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # You can mount a volume for persistent data if needed, e.g., for FAISS index or uploaded PDFs\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 # volumes:\cf2 \cb1 \strokec2 \
+\cb3         \cf6 \strokec6 #   - ./backend_data:/app/data\cf2 \cb1 \strokec2 \
+\cb3     \cb1 \
+}
