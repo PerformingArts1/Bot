@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info, Moon, Sun, Copy } from 'lucide-react';
+import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info, Moon, Sun, Copy, Headphones, PlayCircle, PauseCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useDropzone } from 'react-dropzone';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -10,6 +10,9 @@ import api from './services/api'; // Import the centralized API service
 
 // --- Constants ---
 const BACKEND_URL = import.meta.env.VITE_REACT_APP_API_BASE_URL || 'http://localhost:5000';
+const ALLOWED_TEXT_EXTENSIONS = ['.pdf', '.txt', '.docx'];
+const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.flac', '.m4a'];
+const ALL_ALLOWED_EXTENSIONS = [...ALLOWED_TEXT_EXTENSIONS, ...ALLOWED_AUDIO_EXTENSIONS];
 
 // --- Socket.IO Client ---
 const socket = io(BACKEND_URL, {
@@ -88,14 +91,10 @@ function ChatExport({ chatHistory }) {
 }
 
 // --- File Upload (Drag-and-Drop) Component ---
-function FileUpload({ onUpload, isUploading, socketId }) {
+function FileUpload({ onUpload, isUploading, socketId, acceptedFileTypes, label }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => onUpload(acceptedFiles, socketId), // Pass socketId
-    accept: {
-      "application/pdf": [".pdf"],
-      "text/plain": [".txt"],
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-    },
+    onDrop: (acceptedFiles) => onUpload(acceptedFiles, socketId),
+    accept: acceptedFileTypes,
     multiple: false,
   });
 
@@ -113,11 +112,58 @@ function FileUpload({ onUpload, isUploading, socketId }) {
       ) : isDragActive ? (
         <p className="text-blue-300">Drop the file here ...</p>
       ) : (
-        <p className="text-gray-300">Drag & drop a PDF, TXT, or DOCX file here, or click to select</p>
+        <p className="text-gray-300">{label}</p>
       )}
     </div>
   );
 }
+
+// --- Audio Player Component ---
+function AudioPlayer({ src }) {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const togglePlayPause = () => {
+    if (audioRef.current.paused) {
+      audioRef.current.play();
+    } else {
+      audioRef.current.pause();
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      const onPlay = () => setIsPlaying(true);
+      const onPause = () => setIsPlaying(false);
+      const onEnded = () => setIsPlaying(false);
+
+      audio.addEventListener('play', onPlay);
+      audio.addEventListener('pause', onPause);
+      audio.addEventListener('ended', onEnded);
+
+      return () => {
+        audio.removeEventListener('play', onPlay);
+        audio.removeEventListener('pause', onPause);
+        audio.removeEventListener('ended', onEnded);
+      };
+    }
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 bg-gray-700 dark:bg-gray-700 light:bg-gray-200 p-2 rounded-md">
+      <audio ref={audioRef} src={src} preload="none" className="hidden" />
+      <button onClick={togglePlayPause} className="p-1 rounded-full bg-blue-600 text-white hover:bg-blue-700">
+        {isPlaying ? <PauseCircle size={20} /> : <PlayCircle size={20} />}
+      </button>
+      <span className="text-sm text-gray-300 dark:text-gray-300 light:text-gray-700">Podcast</span>
+      <a href={src} download className="ml-auto p-1 rounded-full text-blue-400 hover:text-blue-300">
+        <Download size={20} />
+      </a>
+    </div>
+  );
+}
+
 
 // --- Main App Component ---
 export default function App() {
@@ -138,10 +184,12 @@ export default function App() {
   const [ollamaModels, setOllamaModels] = useState([]);
 
   const [isLoading, setIsLoading] = useState(false); // General loading state
-  const [isUploading, setIsUploading] = useState(false); // Specific for file upload
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false); // Specific for text file upload
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false); // Specific for audio file upload
   const [isSendingMessage, setIsSendingMessage] = useState(false); // Specific for chat message
   const [uploadMessage, setUploadMessage] = useState('');
   const [documentSearchQuery, setDocumentSearchQuery] = useState('');
+  const [documentTypeFilter, setDocumentTypeFilter] = useState('all'); // 'all', 'text_document', 'audio_transcript'
   const [currentPage, setCurrentPage] = useState(1);
   const [documentsPerPage] = useState(5); // Fixed items per page
   const [totalDocuments, setTotalDocuments] = useState(0);
@@ -162,6 +210,10 @@ export default function App() {
   const currentAssistantMessageRef = useRef(''); // Ref to build streamed assistant message
   const currentAssistantSourcesRef = useRef([]); // Ref to hold sources for streamed message
 
+  // State for podcast generation
+  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState({}); // {documentId: true/false}
+  const [podcastUrls, setPodcastUrls] = useState({}); // {documentId: url}
+
   // Theme management
   useEffect(() => {
     document.documentElement.classList.remove('light', 'dark');
@@ -181,10 +233,9 @@ export default function App() {
 
   // Function to copy text to clipboard
   const copyToClipboard = useCallback((text) => {
-    // Using document.execCommand('copy') as navigator.clipboard.writeText() may not work in some iframe environments
     const textArea = document.createElement("textarea");
     textArea.value = text;
-    textArea.style.position = "fixed"; // Avoid scrolling to bottom
+    textArea.style.position = "fixed";
     textArea.style.left = "-9999px";
     document.body.appendChild(textArea);
     textArea.focus();
@@ -213,18 +264,15 @@ export default function App() {
 
     // Handle streaming chunks
     socket.on('chat_stream_chunk', (data) => {
-      // Append chunk to the current assistant message being built
       currentAssistantMessageRef.current += data.content;
       setChatHistory((prevHistory) => {
         const lastMessage = prevHistory[prevHistory.length - 1];
-        // If the last message is from the assistant and is being streamed, update it
         if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
           return [
             ...prevHistory.slice(0, -1),
             { ...lastMessage, content: currentAssistantMessageRef.current }
           ];
         } else {
-          // Otherwise, start a new assistant message
           return [
             ...prevHistory,
             { role: 'assistant', content: data.content, timestamp: new Date().toISOString(), isStreaming: true }
@@ -238,29 +286,27 @@ export default function App() {
       setIsSendingMessage(false);
       setIsAssistantTyping(false);
       if (data.success) {
-        // Update the final message in history, removing isStreaming flag
         setChatHistory((prevHistory) => {
           const finalContent = currentAssistantMessageRef.current;
-          const finalSources = data.sources; // Sources come with the complete message
+          const finalSources = data.sources;
           const updatedHistory = prevHistory.map((msg, index) => {
             if (index === prevHistory.length - 1 && msg.isStreaming) {
               return { ...msg, content: finalContent, sources: finalSources, isStreaming: false };
             }
             return msg;
           });
-          // If for some reason streaming didn't start correctly, ensure the full message is added
           if (!updatedHistory[updatedHistory.length - 1] || updatedHistory[updatedHistory.length - 1].isStreaming) {
-             return [...data.history]; // Fallback to full history from backend
+             return [...data.history];
           }
           return updatedHistory;
         });
-        currentAssistantMessageRef.current = ''; // Clear for next message
-        currentAssistantSourcesRef.current = []; // Clear for next message
+        currentAssistantMessageRef.current = '';
+        currentAssistantSourcesRef.current = '';
       } else {
         showNotification(`Chat error: ${data.error}`, 'error');
-        setChatHistory(data.history); // Update with error message from backend
-        currentAssistantMessageRef.current = ''; // Clear
-        currentAssistantSourcesRef.current = []; // Clear
+        setChatHistory(data.history);
+        currentAssistantMessageRef.current = '';
+        currentAssistantSourcesRef.current = '';
       }
     });
 
@@ -271,17 +317,52 @@ export default function App() {
     socket.on('document_processing_status', (data) => {
       if (data.success) {
         showNotification(`Document "${data.original_filename}" processed. ${data.num_chunks} chunks indexed.`, 'success');
-        fetchDocuments(); // Refresh document list after successful processing
-        setIsUploading(false); // Turn off upload loading
+        fetchDocuments();
+        setIsUploadingDocument(false);
       }
       console.log('Document processing status:', data);
     });
 
     socket.on('document_processing_error', (data) => {
       showNotification(`Document processing failed for ID ${data.id}: ${data.error}`, 'error');
-      setIsUploading(false); // Ensure upload state is reset
+      setIsUploadingDocument(false);
       console.error('Document processing error:', data);
     });
+
+    // New: Audio processing status
+    socket.on('audio_processing_status', (data) => {
+      if (data.success) {
+        showNotification(`Audio "${data.original_filename}" transcribed and indexed. ${data.num_chunks} chunks.`, 'success');
+        fetchDocuments(); // Refresh document list to show new audio transcript
+        setIsUploadingAudio(false);
+      }
+      console.log('Audio processing status:', data);
+    });
+
+    // New: Audio processing error
+    socket.on('audio_processing_error', (data) => {
+      showNotification(`Audio processing failed for ID ${data.id}: ${data.error}`, 'error');
+      setIsUploadingAudio(false);
+      console.error('Audio processing error:', data);
+    });
+
+    // New: Podcast generation status
+    socket.on('podcast_status', (data) => {
+      if (data.success) {
+        showNotification(`Podcast generated for document ID ${data.id}!`, 'success');
+        setPodcastUrls(prev => ({ ...prev, [data.id]: data.url }));
+        setIsGeneratingPodcast(prev => ({ ...prev, [data.id]: false }));
+      }
+      console.log('Podcast status:', data);
+    });
+
+    // New: Podcast generation error
+    socket.on('podcast_error', (data) => {
+      showNotification(`Podcast generation failed for ID ${data.id}: ${data.error}`, 'error');
+      setIsGeneratingPodcast(prev => ({ ...prev, [data.id]: false }));
+      console.error('Podcast error:', data);
+    });
+
 
     return () => {
       socket.off('connect');
@@ -291,21 +372,35 @@ export default function App() {
       socket.off('typing_indicator');
       socket.off('document_processing_status');
       socket.off('document_processing_error');
+      socket.off('audio_processing_status'); // Clean up new listeners
+      socket.off('audio_processing_error');
+      socket.off('podcast_status');
+      socket.off('podcast_error');
     };
   }, [showNotification]);
 
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api.getDocuments(documentSearchQuery, currentPage, documentsPerPage);
+      const data = await api.getDocuments(documentSearchQuery, currentPage, documentsPerPage, documentTypeFilter);
       setDocuments(data.documents);
       setTotalDocuments(data.total_documents);
+      // Clear podcast URLs for documents not currently displayed
+      setPodcastUrls(prev => {
+        const newUrls = {};
+        data.documents.forEach(doc => {
+          if (prev[doc.id]) {
+            newUrls[doc.id] = prev[doc.id];
+          }
+        });
+        return newUrls;
+      });
     } catch (error) {
       showNotification(`Error fetching documents: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
-  }, [documentSearchQuery, currentPage, documentsPerPage, showNotification]);
+  }, [documentSearchQuery, currentPage, documentsPerPage, documentTypeFilter, showNotification]);
 
   const fetchChatHistory = useCallback(async () => {
     setIsLoading(true);
@@ -372,17 +467,17 @@ export default function App() {
 
   // --- Handlers ---
 
-  const handleDropUpload = useCallback(async (acceptedFiles, currentSocketId) => {
+  const handleDocumentUpload = useCallback(async (acceptedFiles, currentSocketId) => {
     if (!acceptedFiles || acceptedFiles.length === 0) {
       showNotification('No file selected.', 'error');
       return;
     }
     setUploadMessage('');
-    setIsUploading(true);
+    setIsUploadingDocument(true);
     const formData = new FormData();
     formData.append('file', acceptedFiles[0]);
     if (currentSocketId) {
-      formData.append('socket_sid', currentSocketId); // Pass SID for real-time updates
+      formData.append('socket_sid', currentSocketId);
     }
 
     try {
@@ -391,17 +486,48 @@ export default function App() {
         const data = await response.json();
         showNotification(`Document upload initiated for "${data.original_filename}". Processing in background.`, 'success');
         setUploadMessage(`Document upload initiated for "${data.original_filename}".`);
-        // SocketIO listeners will handle the rest (success/error, fetchDocuments, setIsUploading)
       } else {
         const errorData = await response.json();
         showNotification(`Upload failed: ${errorData.error || response.statusText}`, 'error');
         setUploadMessage(`Upload failed: ${errorData.error || response.statusText}`);
-        setIsUploading(false); // Turn off loading if initial upload fails
+        setIsUploadingDocument(false);
       }
     } catch (error) {
       showNotification(`Error uploading file: ${error.message}`, 'error');
       setUploadMessage(`Error uploading file: ${error.message}`);
-      setIsUploading(false); // Turn off loading if network error
+      setIsUploadingDocument(false);
+    }
+  }, [showNotification]);
+
+  const handleAudioUpload = useCallback(async (acceptedFiles, currentSocketId) => {
+    if (!acceptedFiles || acceptedFiles.length === 0) {
+      showNotification('No audio file selected.', 'error');
+      return;
+    }
+    setUploadMessage('');
+    setIsUploadingAudio(true);
+    const formData = new FormData();
+    formData.append('file', acceptedFiles[0]);
+    if (currentSocketId) {
+      formData.append('socket_sid', currentSocketId);
+    }
+
+    try {
+      const response = await api.uploadAudio(formData);
+      if (response.ok) {
+        const data = await response.json();
+        showNotification(`Audio upload initiated for "${data.original_filename}". Processing in background.`, 'success');
+        setUploadMessage(`Audio upload initiated for "${data.original_filename}".`);
+      } else {
+        const errorData = await response.json();
+        showNotification(`Audio upload failed: ${errorData.error || response.statusText}`, 'error');
+        setUploadMessage(`Audio upload failed: ${errorData.error || response.statusText}`);
+        setIsUploadingAudio(false);
+      }
+    } catch (error) {
+      showNotification(`Error uploading audio file: ${error.message}`, 'error');
+      setUploadMessage(`Error uploading audio file: ${error.message}`);
+      setIsUploadingAudio(false);
     }
   }, [showNotification]);
 
@@ -413,7 +539,7 @@ export default function App() {
     try {
       const data = await api.deleteDocument(documentId);
       showNotification(data.message, 'success');
-      fetchDocuments(); // Refresh document list
+      fetchDocuments();
     } catch (error) {
       showNotification(`Failed to delete document: ${error.message}`, 'error');
     } finally {
@@ -435,26 +561,34 @@ export default function App() {
     }
   }, [showNotification]);
 
+  const handleGeneratePodcast = useCallback(async (documentId, filename) => {
+    setIsGeneratingPodcast(prev => ({ ...prev, [documentId]: true }));
+    try {
+      // Pass documentId to backend to retrieve content, or pass text directly
+      await api.generatePodcast(null, documentId, socketId);
+      showNotification(`Podcast generation started for "${filename}".`, 'success');
+    } catch (error) {
+      showNotification(`Failed to start podcast generation for "${filename}": ${error.message}`, 'error');
+      setIsGeneratingPodcast(prev => ({ ...prev, [documentId]: false }));
+    }
+  }, [socketId, showNotification]);
+
   const handleSendMessage = useCallback(async (e) => {
     e.preventDefault();
     if (!currentMessage.trim()) return;
 
-    // Optimistically add user message to history
     const userMessage = { role: 'user', content: currentMessage, timestamp: new Date().toISOString() };
     setChatHistory((prev) => [...prev, userMessage]);
     setCurrentMessage('');
     setIsSendingMessage(true);
-    setIsAssistantTyping(true); // Start typing indicator immediately
+    setIsAssistantTyping(true);
 
-    // Reset current assistant message ref for streaming
     currentAssistantMessageRef.current = '';
     currentAssistantSourcesRef.current = [];
 
     try {
-      // API call is made, but response content will be streamed via Socket.IO
       await api.sendMessage(userMessage.content);
     } catch (error) {
-      // Handle network errors if Socket.IO connection is also down
       const errorMessage = {
         role: 'assistant',
         content: `Network Error: Could not send message. ${error.message}`,
@@ -475,7 +609,6 @@ export default function App() {
     setIsLoading(true);
     try {
       await api.clearChatHistory();
-      // Socket.IO listener will update chatHistory state
       showNotification('Chat history cleared successfully.', 'success');
     } catch (error) {
       showNotification(`Failed to clear chat history: ${error.message}`, 'error');
@@ -491,7 +624,6 @@ export default function App() {
         ...prev,
         [name]: type === 'number' ? parseFloat(value) : value,
       };
-      // Save to localStorage immediately on change
       localStorage.setItem('llmSettings', JSON.stringify(newSettings));
       return newSettings;
     });
@@ -502,7 +634,7 @@ export default function App() {
     try {
       const data = await api.updateLlmSettings(llmSettings);
       showNotification(data.message, 'success');
-      fetchLlmSettings(); // Re-fetch to confirm backend state
+      fetchLlmSettings();
     } catch (error) {
       showNotification(`Failed to update settings: ${error.message}`, 'error');
     } finally {
@@ -518,6 +650,12 @@ export default function App() {
       setCurrentPage(newPage);
     }
   }, [totalPages]);
+
+  // Effect to re-fetch documents when search query, page, or type filter changes
+  useEffect(() => {
+    fetchDocuments();
+  }, [documentSearchQuery, currentPage, documentTypeFilter, fetchDocuments]);
+
 
   // --- UI Render ---
   return (
@@ -667,7 +805,38 @@ export default function App() {
         {activeTab === 'documents' && (
           <div>
             <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Manage Documents</h2>
-            <FileUpload onUpload={handleDropUpload} isUploading={isUploading} socketId={socketId} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-200 dark:text-gray-200 light:text-gray-800">Upload Text Documents</h3>
+                <FileUpload
+                  onUpload={handleDocumentUpload}
+                  isUploading={isUploadingDocument}
+                  socketId={socketId}
+                  acceptedFileTypes={{
+                    "application/pdf": [".pdf"],
+                    "text/plain": [".txt"],
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+                  }}
+                  label="Drag & drop a PDF, TXT, or DOCX file here, or click to select"
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-200 dark:text-gray-200 light:text-gray-800">Upload Audio Files (for Transcription)</h3>
+                <FileUpload
+                  onUpload={handleAudioUpload}
+                  isUploading={isUploadingAudio}
+                  socketId={socketId}
+                  acceptedFileTypes={{
+                    "audio/mpeg": [".mp3"],
+                    "audio/wav": [".wav"],
+                    "audio/flac": [".flac"],
+                    "audio/mp4": [".m4a"], // Common mimetype for m4a
+                  }}
+                  label="Drag & drop an MP3, WAV, FLAC, or M4A file here, or click to select"
+                />
+              </div>
+            </div>
+
             {uploadMessage && (
               <p className={`mt-3 text-sm ${uploadMessage.includes('failed') || uploadMessage.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>
                 {uploadMessage}
@@ -675,20 +844,29 @@ export default function App() {
             )}
 
             <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Uploaded Documents</h3>
-              <div className="flex items-center mb-4">
+              <h3 className="text-xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Uploaded Content</h3>
+              <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
                 <input
                   type="text"
-                  placeholder="Search documents by filename..."
+                  placeholder="Search by filename..."
                   value={documentSearchQuery}
                   onChange={(e) => setDocumentSearchQuery(e.target.value)}
                   onKeyUp={(e) => { if (e.key === 'Enter') setCurrentPage(1); fetchDocuments(); }}
-                  className="flex-grow p-2 rounded-l-lg bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500"
+                  className="flex-grow p-2 rounded-lg bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500"
                   aria-label="Search documents"
                 />
+                <select
+                  value={documentTypeFilter}
+                  onChange={(e) => { setDocumentTypeFilter(e.target.value); setCurrentPage(1); }}
+                  className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="all">All Types</option>
+                  <option value="text_document">Text Documents</option>
+                  <option value="audio_transcript">Audio Transcripts</option>
+                </select>
                 <button
                   onClick={() => { setCurrentPage(1); fetchDocuments(); }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-r-lg flex items-center justify-center"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg flex items-center justify-center"
                   aria-label="Perform search"
                 >
                   <Search size={20} />
@@ -696,7 +874,7 @@ export default function App() {
               </div>
 
               {documents.length === 0 && !isLoading ? (
-                <p className="text-gray-400 dark:text-gray-400 light:text-gray-600 text-center py-4">No documents uploaded yet. Start by uploading one!</p>
+                <p className="text-gray-400 dark:text-gray-400 light:text-gray-600 text-center py-4">No content uploaded yet. Start by uploading a document or audio file!</p>
               ) : (
                 <div className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-lg shadow-inner overflow-hidden">
                   <table className="min-w-full divide-y divide-gray-700 dark:divide-gray-700 light:divide-gray-300">
@@ -706,10 +884,10 @@ export default function App() {
                           Filename
                         </th>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider hidden sm:table-cell">
-                          Upload Date
+                          Type
                         </th>
                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider hidden md:table-cell">
-                          Chunks
+                          Upload Date
                         </th>
                         <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider">
                           Actions
@@ -723,13 +901,29 @@ export default function App() {
                             {doc.original_filename}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 dark:text-gray-400 light:text-gray-600 hidden sm:table-cell">
-                            {new Date(doc.upload_date).toLocaleDateString()}
+                            {doc.type === 'text_document' ? 'Text Document' : 'Audio Transcript'}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 dark:text-gray-400 light:text-gray-600 hidden md:table-cell">
-                            {doc.num_chunks}
+                            {new Date(doc.upload_date).toLocaleDateString()}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex justify-end space-x-2">
+                            <div className="flex justify-end space-x-2 items-center">
+                              {doc.type === 'audio_transcript' && podcastUrls[doc.id] ? (
+                                <AudioPlayer src={podcastUrls[doc.id]} />
+                              ) : doc.type === 'audio_transcript' && isGeneratingPodcast[doc.id] ? (
+                                <span className="text-blue-400 flex items-center text-xs">
+                                  <Loader2 className="animate-spin mr-1" size={16} /> Generating...
+                                </span>
+                              ) : doc.type === 'audio_transcript' ? (
+                                <button
+                                  onClick={() => handleGeneratePodcast(doc.id, doc.original_filename)}
+                                  className="text-green-400 hover:text-green-300 p-1 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 light:text-green-600 light:hover:text-green-500 light:hover:bg-gray-200 flex items-center gap-1"
+                                  title="Generate Podcast"
+                                  disabled={isGeneratingPodcast[doc.id]}
+                                >
+                                  <Headphones size={18} /> <span className="hidden sm:inline">Podcast</span>
+                                </button>
+                              ) : null}
                               <button
                                 onClick={() => handlePreviewDocument(doc.id, doc.original_filename)}
                                 className="text-blue-400 hover:text-blue-300 p-1 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 light:text-blue-600 light:hover:text-blue-500 light:hover:bg-gray-200"
@@ -808,7 +1002,7 @@ export default function App() {
                 )}
               </div>
               <div>
-                <label htmlFor="temperature" className="block text-sm font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 mb-1">Temperature:</label>
+                <label htmlFor="temperature" className="block text-sm font-medium text-gray-300 dark:text-gray-300 dark:text-gray-700 light:text-gray-700 mb-1">Temperature:</label>
                 <input
                   type="number"
                   id="temperature"

@@ -1,7 +1,5 @@
 Flask==3.0.3
 flask-cors==4.0.1
-Flask-SocketIO==5.3.0
-gunicorn==22.0.0
 langchain==0.2.1
 langchain-community==0.2.1
 chromadb==0.4.24
@@ -11,5 +9,12 @@ python-dotenv==1.0.1
 requests==2.32.3
 unstructured==0.12.6
 tiktoken==0.6.0
+flask-socketio==5.3.0
+python-magic==0.4.27 # For file content type detection
+python-magic-bin==0.4.14 # For Windows compatibility, if needed
+langfuse==2.10.0 # Ensure this is the version you intend to use
+neo4j==5.20.0 # Ensure this is the version you intend to use
 rank_bm25==0.2.2
-sentence-transformers==2.7.0 # Added for re-ranking (conceptual)
+# If you plan to use the re-ranker, uncomment the following:
+# sentence-transformers==2.7.0
+# torch==2.3.1 # Or the appropriate version for your system (CPU, CUDA, MPS)

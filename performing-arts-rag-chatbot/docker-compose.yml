@@ -25,13 +25,31 @@ services:
       - "5000:5000" # Expose Flask API port to host
     volumes:
       - ./data:/app/data # Mount your local data directory into the container for persistence
+      # Optional: Mount your local Google Drive synced folder into the container for batch ingestion
+      # - /Users/yourusername/Google Drive/My RAG Documents:/app/gdrive_docs:ro # :ro for read-only
     env_file:
       - ./.env # Load environment variables from project root .env
     environment:
       # Override OLLAMA_HOST to point to the ollama service within the Docker network
       OLLAMA_HOST: http://ollama:11434
+      # Langfuse environment variables (ensure these match .env)
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_HOST: http://langfuse:3000 # Internal Docker network hostname
+      # Neo4j environment variables
+      NEO4J_URI: bolt://neo4j:7687 # Internal Docker network hostname
+      NEO4J_USERNAME: ${NEO4J_USERNAME}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      # New: Whisper ASR and Coqui TTS API hosts (internal Docker network)
+      WHISPER_ASR_HOST: http://whisper-asr:9000
+      COQUI_TTS_HOST: http://coqui-tts:5002
     depends_on:
-      - ollama # Ensure Ollama starts before backend
+      - ollama
+      - postgresql # Backend depends on Langfuse's DB
+      - langfuse   # Backend depends on Langfuse server
+      - neo4j      # Backend depends on Neo4j
+      - whisper-asr # Backend depends on Whisper
+      - coqui-tts   # Backend depends on Coqui TTS
     restart: unless-stopped
 
   # React Frontend Service
@@ -41,14 +59,103 @@ services:
       dockerfile: Dockerfile
     container_name: rag_frontend
     ports:
-      - "3000:80" # Map host port 3000 to container's Nginx port 80
+      - "3001:80" # <<< CHANGED: Map host port 3001 to container's Nginx port 80
     environment:
       # Pass API base URL to React build process
-      # This will be substituted in the React app at build time
-      VITE_REACT_APP_API_BASE_URL: ${VITE_REACT_APP_API_BASE_URL:-http://localhost:5000}
+      REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:5000}
     depends_on:
       - backend # Ensure backend starts before frontend
     restart: unless-stopped
 
+  # Langfuse PostgreSQL Database
+  postgresql:
+    image: postgres:15-alpine
+    container_name: langfuse_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-langfuse}
+      POSTGRES_USER: ${POSTGRES_USER:-langfuse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-langfuse}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Langfuse Server
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    container_name: langfuse_server
+    ports:
+      - "3000:3000" # Expose Langfuse UI to host (remains at 3000)
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-langfuse}:${POSTGRES_PASSWORD:-langfuse}@postgresql:5432/${POSTGRES_DB:-langfuse}
+      # Host for the Langfuse UI to connect to itself
+      NEXTAUTH_URL: http://localhost:3000 # This is the host-facing URL for the Langfuse UI
+      # Keys for your application to send traces to Langfuse
+      # These should match the LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env
+      PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      # Other Langfuse settings (optional)
+      # NODE_ENV: production
+      # LOG_LEVEL: debug
+    depends_on:
+      - postgresql
+    restart: unless-stopped
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5.19.0-community # Using a specific version for stability
+    container_name: neo4j_db
+    ports:
+      - "7474:7474" # Browser UI
+      - "7687:7687" # Bolt port (for driver connection)
+    volumes:
+      - neo4j_data:/data
+      - ./neo4j/conf:/conf # Mount a custom conf directory if needed
+      - ./neo4j/plugins:/plugins # Mount for APOC, GDS etc. if needed later
+    environment:
+      # Set initial password for neo4j user
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD} # Use the password from .env
+      # Allow remote connections (important for Docker)
+      NEO4J_db_auth__enabled: "true"
+      NEO4J_db_security_auth__enabled: "true"
+      NEO4J_dbms_connector_bolt_listen_address: "0.0.0.0:7687"
+      NEO4J_dbms_connector_http_listen_address: "0.0.0.0:7474"
+      NEO4J_dbms_connector_https_listen_address: "0.0.0.0:7473"
+      # Increase heap size for better performance on M4 Max (adjust as needed)
+      # NEO4J_dbms_memory_heap_max__size: "4G" # Example, adjust based on available RAM
+    restart: unless-stopped
+
+  # Whisper ASR Service (Audio Transcription)
+  whisper-asr:
+    image: ahmetoner/whisper-asr-webservice:latest # Using the provided image from InsightsLM
+    container_name: whisper_asr_server
+    ports:
+      - "9000:9000" # Expose Whisper API port
+    environment:
+      ASR_MODEL: base # You can change this to 'small', 'medium', 'large' based on accuracy/performance needs
+      ASR_ENGINE: openai_whisper # Or 'faster_whisper' for potentially better performance
+      # Other settings like device (cuda, cpu, mps) could be set here
+      # DEVICE: mps # Uncomment for Apple Silicon GPU support, if the image supports it
+    volumes:
+      - whisper_cache:/root/.cache/whisper # Cache downloaded models
+    restart: unless-stopped
+
+  # Coqui TTS Service (Text-to-Speech)
+  coqui-tts:
+    image: ghcr.io/coqui-ai/tts:latest # Using the provided image from InsightsLM
+    container_name: coqui_tts_server
+    ports:
+      - "5002:5002" # Expose Coqui TTS API port
+    environment:
+      # You might need to specify the model to load, or it defaults to a common one
+      # Example: MODEL_NAME: tts_models/en/ljspeech/tacotron2-DDC
+      # DEVICE: mps # Uncomment for Apple Silicon GPU support, if the image supports it
+    volumes:
+      - coqui_tts_models:/root/.local/share/tts # Persist downloaded models
+    restart: unless-stopped
+
 volumes:
   ollama_data:
+  postgres_data:
+  neo4j_data:
+  whisper_cache: # New volume for Whisper models
+  coqui_tts_models: # New volume for Coqui TTS models
