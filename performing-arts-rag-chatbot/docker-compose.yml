@@ -45,10 +45,10 @@ services:
     environment:
       # Pass API base URL to React build process
       # This will be substituted in the React app at build time
-      REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-http://localhost:5000}
+      VITE_REACT_APP_API_BASE_URL: ${VITE_REACT_APP_API_BASE_URL:-http://localhost:5000}
     depends_on:
       - backend # Ensure backend starts before frontend
     restart: unless-stopped
 
 volumes:
-  ollama_data: # Define the named volume for Ollama persistence
+  ollama_data:

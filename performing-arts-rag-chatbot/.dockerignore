@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 *.pyo
-.Python/
 venv/
 .venv/
 env/
@@ -19,13 +18,8 @@ data/
 .git
 .gitignore
 
-# Build artifacts for frontend (if building frontend inside Docker, usually not recommended for multi-stage)
-build/
-dist/
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Frontend specific files (only copy backend code into backend container)
+frontend/
 
 # Other common ignores
 *.log

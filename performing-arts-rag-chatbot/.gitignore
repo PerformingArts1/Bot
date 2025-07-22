@@ -20,6 +20,7 @@ chroma_db/
 documents/
 tinydb/
 *.db
+test_data_for_app/ # Added for backend tests
 
 # Environment variables
 .env
@@ -27,13 +28,13 @@ tinydb/
 # Logs
 *.log
 
-# Frontend build artifacts and dependencies (if in the same repo)
-node_modules/
-build/
-dist/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Frontend build artifacts and dependencies
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
 
 # OS specific files
 .DS_Store

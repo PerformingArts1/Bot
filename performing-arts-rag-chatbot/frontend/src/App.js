@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info } from 'lucide-react';
+import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info, Moon, Sun } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useDropzone } from 'react-dropzone';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import io from 'socket.io-client'; // Import socket.io-client
 
-// Base URL for the Flask backend
-const API_BASE_URL = 'http://localhost:5000'; // Make sure this matches your Flask app's port
+import api from './services/api'; // Import the centralized API service
+
+// --- Constants ---
+const BACKEND_URL = import.meta.env.VITE_REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+// --- Socket.IO Client ---
+const socket = io(BACKEND_URL, {
+  transports: ['websocket', 'polling']
+});
 
 // --- Toast Component ---
 function Toast({ message, type, onClose }) {
@@ -21,7 +29,7 @@ function Toast({ message, type, onClose }) {
   }, [onClose]);
 
   return (
-    <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white flex items-center gap-2 ${bgColor} z-50`}>
+    <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white flex items-center gap-2 ${bgColor} z-50 animate-fade-in-up`}>
       {icon}
       <span>{message}</span>
       <button onClick={onClose} className="ml-auto p-1 rounded-full hover:bg-white/20">
@@ -80,9 +88,9 @@ function ChatExport({ chatHistory }) {
 }
 
 // --- File Upload (Drag-and-Drop) Component ---
-function FileUpload({ onUpload, isUploading }) {
+function FileUpload({ onUpload, isUploading, socketId }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: onUpload,
+    onDrop: (acceptedFiles) => onUpload(acceptedFiles, socketId), // Pass socketId
     accept: {
       "application/pdf": [".pdf"],
       "text/plain": [".txt"],
@@ -117,7 +125,16 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [chatHistory, setChatHistory] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
-  const [llmSettings, setLlmSettings] = useState({ model: '', temperature: 0.7, top_k: 40, top_p: 0.9 });
+  const [llmSettings, setLlmSettings] = useState(() => {
+    // Load LLM settings from localStorage on initial render
+    try {
+      const savedSettings = localStorage.getItem('llmSettings');
+      return savedSettings ? JSON.parse(savedSettings) : { model: '', temperature: 0.7, top_k: 40, top_p: 0.9 };
+    } catch (error) {
+      console.error("Failed to parse LLM settings from localStorage", error);
+      return { model: '', temperature: 0.7, top_k: 40, top_p: 0.9 };
+    }
+  });
   const [ollamaModels, setOllamaModels] = useState([]);
 
   const [isLoading, setIsLoading] = useState(false); // General loading state
@@ -137,7 +154,22 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' or 'error'
 
+  const [socketId, setSocketId] = useState(null); // Store Socket.IO SID
+  const [isAssistantTyping, setIsAssistantTyping] = useState(false); // State for typing indicator
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark'); // 'dark' or 'light'
+
   const chatHistoryRef = useRef(null); // Ref for auto-scrolling chat
+
+  // Theme management
+  useEffect(() => {
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
+  };
 
   const showNotification = useCallback((message, type) => {
     setToastMessage(message);
@@ -145,17 +177,67 @@ export default function App() {
     setShowToast(true);
   }, []);
 
+  // Socket.IO setup
+  useEffect(() => {
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO');
+      setSocketId(socket.id);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO');
+      setSocketId(null);
+    });
+
+    socket.on('chat_response', (data) => {
+      if (data.success) {
+        setChatHistory(data.history); // Update full history from backend
+      } else {
+        showNotification(`Chat error: ${data.error}`, 'error');
+        // If an error occurred, the backend will have added an error message to history
+        setChatHistory(data.history);
+      }
+      setIsSendingMessage(false); // Ensure typing indicator is off
+      setIsAssistantTyping(false);
+    });
+
+    socket.on('typing_indicator', (data) => {
+      setIsAssistantTyping(data.status);
+    });
+
+    socket.on('document_processing_status', (data) => {
+      if (data.success) {
+        showNotification(`Document "${data.original_filename}" processed. ${data.num_chunks} chunks indexed.`, 'success');
+        fetchDocuments(); // Refresh document list after successful processing
+      } else {
+        // This should ideally not happen for success, but good fallback
+      }
+      // You could also update a specific document's status in the UI here
+      console.log('Document processing status:', data);
+    });
+
+    socket.on('document_processing_error', (data) => {
+      showNotification(`Document processing failed for ID ${data.id}: ${data.error}`, 'error');
+      setIsUploading(false); // Ensure upload state is reset
+      console.error('Document processing error:', data);
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('chat_response');
+      socket.off('typing_indicator');
+      socket.off('document_processing_status');
+      socket.off('document_processing_error');
+    };
+  }, [showNotification]);
+
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/documents?query=${documentSearchQuery}&page=${currentPage}&limit=${documentsPerPage}`);
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents);
-        setTotalDocuments(data.total_documents);
-      } else {
-        showNotification(`Failed to fetch documents: ${response.statusText}`, 'error');
-      }
+      const data = await api.getDocuments(documentSearchQuery, currentPage, documentsPerPage);
+      setDocuments(data.documents);
+      setTotalDocuments(data.total_documents);
     } catch (error) {
       showNotification(`Error fetching documents: ${error.message}`, 'error');
     } finally {
@@ -166,13 +248,8 @@ export default function App() {
   const fetchChatHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/chat_history`);
-      if (response.ok) {
-        const data = await response.json();
-        setChatHistory(data.history);
-      } else {
-        showNotification(`Failed to fetch chat history: ${response.statusText}`, 'error');
-      }
+      const data = await api.getChatHistory();
+      setChatHistory(data.history);
     } catch (error) {
       showNotification(`Error fetching chat history: ${error.message}`, 'error');
     } finally {
@@ -183,20 +260,22 @@ export default function App() {
   const fetchLlmSettings = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/llm_settings`);
-      if (response.ok) {
-        const data = await response.json();
-        setLlmSettings({
-          model: data.model,
-          temperature: data.temperature,
-          top_k: data.top_k,
-          top_p: data.top_p,
-        });
-      } else {
-        showNotification(`Failed to fetch LLM settings: ${response.statusText}`, 'error');
-      }
+      const data = await api.getLlmSettings();
+      setLlmSettings({
+        model: data.model,
+        temperature: data.temperature,
+        top_k: data.top_k,
+        top_p: data.top_p,
+      });
+      // Save to localStorage
+      localStorage.setItem('llmSettings', JSON.stringify({
+        model: data.model,
+        temperature: data.temperature,
+        top_k: data.top_k,
+        top_p: data.top_p,
+      }));
     } catch (error) {
-      showNotification(`Error fetching LLM settings: ${error.message}`, 'error');
+      showNotification(`Failed to fetch LLM settings: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -205,13 +284,8 @@ export default function App() {
   const fetchOllamaModels = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/ollama_models`);
-      if (response.ok) {
-        const data = await response.json();
-        setOllamaModels(data.models);
-      } else {
-        showNotification(`Failed to fetch Ollama models: ${response.error || response.statusText}`, 'error');
-      }
+      const data = await api.getOllamaModels();
+      setOllamaModels(data.models);
     } catch (error) {
       showNotification(`Error fetching Ollama models: ${error.message}`, 'error');
     } finally {
@@ -236,8 +310,7 @@ export default function App() {
 
   // --- Handlers ---
 
-  // Handles file upload via drag-and-drop
-  const handleDropUpload = useCallback(async (acceptedFiles) => {
+  const handleDropUpload = useCallback(async (acceptedFiles, currentSocketId) => {
     if (!acceptedFiles || acceptedFiles.length === 0) {
       showNotification('No file selected.', 'error');
       return;
@@ -246,29 +319,30 @@ export default function App() {
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', acceptedFiles[0]);
+    if (currentSocketId) {
+      formData.append('socket_sid', currentSocketId); // Pass SID for real-time updates
+    }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/upload_document`, {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await api.uploadDocument(formData);
       if (response.ok) {
         const data = await response.json();
-        showNotification(`File uploaded: ${data.original_filename} (${data.num_chunks} chunks).`, 'success');
-        setUploadMessage(`File uploaded: ${data.original_filename} (${data.num_chunks} chunks).`);
-        fetchDocuments(); // Refresh document list
+        showNotification(`Document upload initiated for "${data.original_filename}". Processing in background.`, 'success');
+        setUploadMessage(`Document upload initiated for "${data.original_filename}".`);
+        // No need to fetchDocuments immediately here, SocketIO will trigger it on completion
       } else {
         const errorData = await response.json();
         showNotification(`Upload failed: ${errorData.error || response.statusText}`, 'error');
         setUploadMessage(`Upload failed: ${errorData.error || response.statusText}`);
+        setIsUploading(false); // Turn off loading if initial upload fails
       }
     } catch (error) {
       showNotification(`Error uploading file: ${error.message}`, 'error');
       setUploadMessage(`Error uploading file: ${error.message}`);
-    } finally {
-      setIsUploading(false);
+      setIsUploading(false); // Turn off loading if network error
     }
-  }, [fetchDocuments, showNotification]);
+    // Note: setIsUploading(false) is handled by SocketIO listeners on success/error
+  }, [showNotification]);
 
   const handleDeleteDocument = useCallback(async (documentId, filename) => {
     if (!window.confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
@@ -276,18 +350,11 @@ export default function App() {
     }
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/delete_document/${documentId}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        showNotification(`Document "${filename}" deleted successfully.`, 'success');
-        fetchDocuments(); // Refresh document list
-      } else {
-        const errorData = await response.json();
-        showNotification(`Failed to delete document: ${errorData.error || response.statusText}`, 'error');
-      }
+      const data = await api.deleteDocument(documentId);
+      showNotification(data.message, 'success');
+      fetchDocuments(); // Refresh document list
     } catch (error) {
-      showNotification(`Error deleting document: ${error.message}`, 'error');
+      showNotification(`Failed to delete document: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -296,18 +363,12 @@ export default function App() {
   const handlePreviewDocument = useCallback(async (documentId, filename) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/preview_extracted_text/${documentId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setPreviewContent(data.content);
-        setPreviewTitle(`Preview: ${filename}${data.truncated ? ' (truncated)' : ''}`);
-        setShowPreviewModal(true);
-      } else {
-        const errorData = await response.json();
-        showNotification(`Failed to preview document: ${errorData.error || response.statusText}`, 'error');
-      }
+      const data = await api.previewExtractedText(documentId);
+      setPreviewContent(data.content);
+      setPreviewTitle(`Preview: ${filename}${data.truncated ? ' (truncated)' : ''}`);
+      setShowPreviewModal(true);
     } catch (error) {
-      showNotification(`Error previewing document: ${error.message}`, 'error');
+      showNotification(`Failed to preview document: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -317,49 +378,29 @@ export default function App() {
     e.preventDefault();
     if (!currentMessage.trim()) return;
 
+    // Optimistically update UI with user message
     const userMessage = { role: 'user', content: currentMessage, timestamp: new Date().toISOString() };
     setChatHistory((prev) => [...prev, userMessage]);
     setCurrentMessage('');
     setIsSendingMessage(true);
+    setIsAssistantTyping(true); // Start typing indicator immediately
 
     try {
-      const response = await fetch(`${API_BASE_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage.content }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const assistantMessage = {
-          role: 'assistant',
-          content: data.response,
-          timestamp: data.timestamp,
-          sources: data.sources,
-        };
-        setChatHistory((prev) => [...prev, assistantMessage]);
-      } else {
-        const errorData = await response.json();
-        const errorMessage = {
-          role: 'assistant',
-          content: `Error: ${errorData.error || response.statusText}`,
-          timestamp: new Date().toISOString(),
-          isError: true,
-        };
-        setChatHistory((prev) => [...prev, errorMessage]);
-        showNotification(`Chat failed: ${errorData.error || response.statusText}`, 'error');
-      }
+      // API call is made, but response will come via Socket.IO for real-time update
+      await api.sendMessage(userMessage.content);
+      // The socket.on('chat_response') listener will handle updating chatHistory
     } catch (error) {
+      // Handle network errors if Socket.IO connection is also down
       const errorMessage = {
         role: 'assistant',
-        content: `Network Error: ${error.message}`,
+        content: `Network Error: Could not send message. ${error.message}`,
         timestamp: new Date().toISOString(),
         isError: true,
       };
       setChatHistory((prev) => [...prev, errorMessage]);
       showNotification(`Network error during chat: ${error.message}`, 'error');
-    } finally {
       setIsSendingMessage(false);
+      setIsAssistantTyping(false);
     }
   }, [currentMessage, showNotification]);
 
@@ -369,18 +410,11 @@ export default function App() {
     }
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/clear_chat_history`, {
-        method: 'POST',
-      });
-      if (response.ok) {
-        setChatHistory([]);
-        showNotification('Chat history cleared successfully.', 'success');
-      } else {
-        const errorData = await response.json();
-        showNotification(`Failed to clear chat history: ${errorData.error || response.statusText}`, 'error');
-      }
+      await api.clearChatHistory();
+      // Socket.IO listener will update chatHistory state
+      showNotification('Chat history cleared successfully.', 'success');
     } catch (error) {
-      showNotification(`Error clearing chat history: ${error.message}`, 'error');
+      showNotification(`Failed to clear chat history: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -388,31 +422,25 @@ export default function App() {
 
   const handleLlmSettingChange = useCallback((e) => {
     const { name, value, type } = e.target;
-    setLlmSettings((prev) => ({
-      ...prev,
-      [name]: type === 'number' ? parseFloat(value) : value,
-    }));
+    setLlmSettings((prev) => {
+      const newSettings = {
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) : value,
+      };
+      // Save to localStorage immediately on change
+      localStorage.setItem('llmSettings', JSON.stringify(newSettings));
+      return newSettings;
+    });
   }, []);
 
   const handleUpdateLlmSettings = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/llm_settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(llmSettings),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        showNotification(data.message, 'success');
-        // Re-fetch settings to ensure UI reflects backend state, including defaults if any were applied
-        fetchLlmSettings();
-      } else {
-        const errorData = await response.json();
-        showNotification(`Failed to update settings: ${errorData.error || response.statusText}`, 'error');
-      }
+      const data = await api.updateLlmSettings(llmSettings);
+      showNotification(data.message, 'success');
+      fetchLlmSettings(); // Re-fetch to confirm backend state
     } catch (error) {
-      showNotification(`Error updating settings: ${error.message}`, 'error');
+      showNotification(`Failed to update settings: ${error.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -429,28 +457,35 @@ export default function App() {
 
   // --- UI Render ---
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-inter">
+    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col font-inter transition-colors duration-300 dark:bg-gray-900 dark:text-gray-100 light:bg-gray-100 light:text-gray-900">
       {/* Header */}
-      <header className="bg-gray-800 p-4 shadow-md flex items-center justify-between flex-wrap">
-        <h1 className="text-2xl font-bold text-blue-400 mb-2 sm:mb-0">Local RAG System</h1>
+      <header className="bg-gray-800 dark:bg-gray-800 light:bg-blue-100 p-4 shadow-md flex items-center justify-between flex-wrap transition-colors duration-300">
+        <h1 className="text-2xl font-bold text-blue-400 dark:text-blue-400 light:text-blue-700 mb-2 sm:mb-0">Local RAG System</h1>
         <nav className="flex space-x-2 sm:space-x-4">
           <button
             onClick={() => setActiveTab('chat')}
-            className={`tab-button ${activeTab === 'chat' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`tab-button ${activeTab === 'chat' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300'}`}
           >
             <MessageSquare size={20} /> <span className="hidden sm:inline">Chat</span>
           </button>
           <button
             onClick={() => setActiveTab('documents')}
-            className={`tab-button ${activeTab === 'documents' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`tab-button ${activeTab === 'documents' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300'}`}
           >
             <FileText size={20} /> <span className="hidden sm:inline">Documents</span>
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`tab-button ${activeTab === 'settings' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`tab-button ${activeTab === 'settings' ? 'bg-blue-700 text-white' : 'bg-gray-700 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300'}`}
           >
             <Settings size={20} /> <span className="hidden sm:inline">Settings</span>
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="tab-button bg-gray-700 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300"
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
         </nav>
       </header>
@@ -466,27 +501,48 @@ export default function App() {
 
         {activeTab === 'chat' && (
           <div className="flex flex-col h-[calc(100vh-150px)]"> {/* Adjust height based on header/footer */}
-            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300">Chat with your RAG System</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Chat with your RAG System</h2>
             <ChatExport chatHistory={chatHistory} />
-            <div ref={chatHistoryRef} className="flex-grow bg-gray-800 p-4 rounded-lg shadow-inner overflow-y-auto mb-4 custom-scrollbar">
+            <div ref={chatHistoryRef} className="flex-grow bg-gray-800 dark:bg-gray-800 light:bg-white p-4 rounded-lg shadow-inner overflow-y-auto mb-4 custom-scrollbar">
               {chatHistory.length === 0 ? (
-                <p className="text-gray-400 text-center py-4">Start a conversation!</p>
+                <p className="text-gray-400 dark:text-gray-400 light:text-gray-600 text-center py-4">Start a conversation!</p>
               ) : (
                 chatHistory.map((msg, index) => (
-                  <div key={index} className={`mb-4 p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-900 ml-auto text-right' : 'bg-gray-700 mr-auto text-left'} max-w-[90%] sm:max-w-[75%] break-words`}>
+                  <div key={index} className={`mb-4 p-3 rounded-lg animate-fade-in ${msg.role === 'user' ? 'bg-blue-900 dark:bg-blue-900 light:bg-blue-100 ml-auto text-right' : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 mr-auto text-left'} max-w-[90%] sm:max-w-[75%] break-words`}>
                     <p className="font-semibold text-sm mb-1">
-                      {msg.role === 'user' ? 'You' : 'Assistant'} <span className="text-gray-400 text-xs ml-2">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                      {msg.role === 'user' ? 'You' : 'Assistant'} <span className="text-gray-400 dark:text-gray-400 light:text-gray-500 text-xs ml-2">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                     </p>
-                    <ReactMarkdown className="prose prose-invert max-w-none">
+                    <ReactMarkdown
+                      className="prose prose-invert max-w-none dark:prose-invert light:prose"
+                      components={{
+                        code({ node, inline, className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={atomDark}
+                              language={match[1]}
+                              PreTag="div"
+                              {...props}
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
                       {msg.content}
                     </ReactMarkdown>
                     {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-2 text-xs text-gray-400 border-t border-gray-600 pt-2">
+                      <div className="mt-2 text-xs text-gray-400 dark:text-gray-400 light:text-gray-600 border-t border-gray-600 dark:border-gray-600 light:border-gray-300 pt-2">
                         <p className="font-medium mb-1">Sources:</p>
                         <ul className="list-disc list-inside">
                           {msg.sources.map((source, srcIndex) => (
                             <li key={srcIndex}>
-                              <span className="font-mono text-gray-300">{source.original_filename}</span> (Chunk: {source.chunk_index}, Doc ID: {source.document_id.substring(0, 8)}...)
+                              <span className="font-mono text-gray-300 dark:text-gray-300 light:text-gray-700">{source.original_filename}</span> (Chunk: {source.chunk_index}, Doc ID: {source.document_id.substring(0, 8)}...)
                             </li>
                           ))}
                         </ul>
@@ -495,8 +551,8 @@ export default function App() {
                   </div>
                 ))
               )}
-              {isSendingMessage && (
-                <div className="flex items-center gap-2 text-gray-500 my-2 p-3 bg-gray-700 rounded-lg max-w-fit">
+              {isAssistantTyping && (
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-500 light:text-gray-600 my-2 p-3 bg-gray-700 dark:bg-gray-700 light:bg-gray-200 rounded-lg max-w-fit animate-pulse">
                   <Loader2 className="animate-spin" size={18} />
                   <span>Assistant is typing...</span>
                 </div>
@@ -508,7 +564,7 @@ export default function App() {
                 value={currentMessage}
                 onChange={(e) => setCurrentMessage(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-grow p-3 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                className="flex-grow p-3 rounded-lg bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 light:focus:border-blue-500"
                 disabled={isSendingMessage}
                 aria-label="Your message"
               />
@@ -534,8 +590,8 @@ export default function App() {
 
         {activeTab === 'documents' && (
           <div>
-            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300">Manage Documents</h2>
-            <FileUpload onUpload={handleDropUpload} isUploading={isUploading} />
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Manage Documents</h2>
+            <FileUpload onUpload={handleDropUpload} isUploading={isUploading} socketId={socketId} />
             {uploadMessage && (
               <p className={`mt-3 text-sm ${uploadMessage.includes('failed') || uploadMessage.includes('Error') ? 'text-red-400' : 'text-green-400'}`}>
                 {uploadMessage}
@@ -543,7 +599,7 @@ export default function App() {
             )}
 
             <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-4 text-blue-300">Uploaded Documents</h3>
+              <h3 className="text-xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">Uploaded Documents</h3>
               <div className="flex items-center mb-4">
                 <input
                   type="text"
@@ -551,7 +607,7 @@ export default function App() {
                   value={documentSearchQuery}
                   onChange={(e) => setDocumentSearchQuery(e.target.value)}
                   onKeyUp={(e) => { if (e.key === 'Enter') setCurrentPage(1); fetchDocuments(); }}
-                  className="flex-grow p-2 rounded-l-lg bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                  className="flex-grow p-2 rounded-l-lg bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500"
                   aria-label="Search documents"
                 />
                 <button
@@ -564,50 +620,50 @@ export default function App() {
               </div>
 
               {documents.length === 0 && !isLoading ? (
-                <p className="text-gray-400 text-center py-4">No documents uploaded yet. Start by uploading one!</p>
+                <p className="text-gray-400 dark:text-gray-400 light:text-gray-600 text-center py-4">No documents uploaded yet. Start by uploading one!</p>
               ) : (
-                <div className="bg-gray-800 rounded-lg shadow-inner overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700">
+                <div className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-lg shadow-inner overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-700 dark:divide-gray-700 light:divide-gray-300">
+                    <thead className="bg-gray-700 dark:bg-gray-700 light:bg-gray-200">
                       <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider">
                           Filename
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden sm:table-cell">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider hidden sm:table-cell">
                           Upload Date
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider hidden md:table-cell">
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider hidden md:table-cell">
                           Chunks
                         </th>
-                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-700">
+                    <tbody className="divide-y divide-gray-700 dark:divide-gray-700 light:divide-gray-300">
                       {documents.map((doc) => (
-                        <tr key={doc.id} className="hover:bg-gray-700">
-                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-200">
+                        <tr key={doc.id} className="hover:bg-gray-700 dark:hover:bg-gray-700 light:hover:bg-gray-100">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-200 dark:text-gray-200 light:text-gray-800">
                             {doc.original_filename}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 hidden sm:table-cell">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 dark:text-gray-400 light:text-gray-600 hidden sm:table-cell">
                             {new Date(doc.upload_date).toLocaleDateString()}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 hidden md:table-cell">
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400 dark:text-gray-400 light:text-gray-600 hidden md:table-cell">
                             {doc.num_chunks}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end space-x-2">
                               <button
                                 onClick={() => handlePreviewDocument(doc.id, doc.original_filename)}
-                                className="text-blue-400 hover:text-blue-300 p-1 rounded-md hover:bg-gray-700"
+                                className="text-blue-400 hover:text-blue-300 p-1 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 light:text-blue-600 light:hover:text-blue-500 light:hover:bg-gray-200"
                                 aria-label={`Preview ${doc.original_filename}`}
                               >
                                 <Eye size={18} />
                               </button>
                               <button
                                 onClick={() => handleDeleteDocument(doc.id, doc.original_filename)}
-                                className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-gray-700"
+                                className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-gray-700 dark:hover:bg-gray-700 light:text-red-600 light:hover:text-red-500 light:hover:bg-gray-200"
                                 aria-label={`Delete ${doc.original_filename}`}
                               >
                                 <Trash2 size={18} />
@@ -627,17 +683,17 @@ export default function App() {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1 || isLoading}
-                    className="pagination-button"
+                    className="pagination-button dark:pagination-button light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300 light:disabled:bg-gray-300"
                   >
                     <ChevronLeft size={20} />
                   </button>
-                  <span className="text-gray-300 text-sm">
+                  <span className="text-gray-300 dark:text-gray-300 light:text-gray-700 text-sm">
                     Page {currentPage} of {totalPages}
                   </span>
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || isLoading}
-                    className="pagination-button"
+                    className="pagination-button dark:pagination-button light:bg-blue-200 light:text-blue-800 light:hover:bg-blue-300 light:disabled:bg-gray-300"
                   >
                     <ChevronRight size={20} />
                   </button>
@@ -648,17 +704,17 @@ export default function App() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="bg-gray-800 p-6 rounded-lg shadow-inner">
-            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300">LLM Settings</h2>
+          <div className="bg-gray-800 dark:bg-gray-800 light:bg-white p-6 rounded-lg shadow-inner">
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-blue-300 dark:text-blue-300 light:text-blue-600">LLM Settings</h2>
             <div className="space-y-4">
               <div>
-                <label htmlFor="llmModel" className="block text-sm font-medium text-gray-300 mb-1">LLM Model:</label>
+                <label htmlFor="llmModel" className="block text-sm font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 mb-1">LLM Model:</label>
                 <select
                   id="llmModel"
                   name="model"
                   value={llmSettings.model}
                   onChange={handleLlmSettingChange}
-                  className="w-full p-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                  className="w-full p-2 rounded-md bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 light:focus:border-blue-500"
                   disabled={isLoading}
                 >
                   {ollamaModels.length === 0 ? (
@@ -676,7 +732,7 @@ export default function App() {
                 )}
               </div>
               <div>
-                <label htmlFor="temperature" className="block text-sm font-medium text-gray-300 mb-1">Temperature:</label>
+                <label htmlFor="temperature" className="block text-sm font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 mb-1">Temperature:</label>
                 <input
                   type="number"
                   id="temperature"
@@ -686,14 +742,14 @@ export default function App() {
                   step="0.1"
                   min="0.0"
                   max="2.0"
-                  className="w-full p-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                  className="w-full p-2 rounded-md bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 light:focus:border-blue-500"
                   disabled={isLoading}
                   aria-describedby="temperature-help"
                 />
-                <p id="temperature-help" className="text-xs text-gray-400 mt-1">Controls randomness. Lower values are more deterministic. (0.0 - 2.0)</p>
+                <p id="temperature-help" className="text-xs text-gray-400 dark:text-gray-400 light:text-gray-500 mt-1">Controls randomness. Lower values are more deterministic. (0.0 - 2.0)</p>
               </div>
               <div>
-                <label htmlFor="topK" className="block text-sm font-medium text-gray-300 mb-1">Top K:</label>
+                <label htmlFor="topK" className="block text-sm font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 mb-1">Top K:</label>
                 <input
                   type="number"
                   id="topK"
@@ -703,14 +759,14 @@ export default function App() {
                   step="1"
                   min="0"
                   max="1000"
-                  className="w-full p-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                  className="w-full p-2 rounded-md bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 light:focus:border-blue-500"
                   disabled={isLoading}
                   aria-describedby="topk-help"
                 />
-                <p id="topk-help" className="text-xs text-gray-400 mt-1">Limits the number of highest probability tokens to consider. (0 - 1000)</p>
+                <p id="topk-help" className="text-xs text-gray-400 dark:text-gray-400 light:text-gray-500 mt-1">Limits the number of highest probability tokens to consider. (0 - 1000)</p>
               </div>
               <div>
-                <label htmlFor="topP" className="block text-sm font-medium text-gray-300 mb-1">Top P:</label>
+                <label htmlFor="topP" className="block text-sm font-medium text-gray-300 dark:text-gray-300 light:text-gray-700 mb-1">Top P:</label>
                 <input
                   type="number"
                   id="topP"
@@ -720,11 +776,11 @@ export default function App() {
                   step="0.05"
                   min="0.0"
                   max="1.0"
-                  className="w-full p-2 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:border-blue-500"
+                  className="w-full p-2 rounded-md bg-gray-700 dark:bg-gray-700 light:bg-white border border-gray-600 dark:border-gray-600 light:border-gray-300 focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 light:focus:border-blue-500"
                   disabled={isLoading}
                   aria-describedby="topp-help"
                 />
-                <p id="topp-help" className="text-xs text-gray-400 mt-1">Nucleus sampling: filters tokens by cumulative probability. (0.0 - 1.0)</p>
+                <p id="topp-help" className="text-xs text-gray-400 dark:text-gray-400 light:text-gray-500 mt-1">Nucleus sampling: filters tokens by cumulative probability. (0.0 - 1.0)</p>
               </div>
               <button
                 onClick={handleUpdateLlmSettings}
@@ -741,15 +797,15 @@ export default function App() {
 
       {/* Document Preview Modal */}
       {showPreviewModal && (
-        <div className="fixed inset-0 bg-gray-950 bg-opacity-80 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-blue-300">{previewTitle}</h3>
-              <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700" aria-label="Close preview">
+        <div className="fixed inset-0 bg-gray-950 bg-opacity-80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-gray-800 dark:bg-gray-800 light:bg-white rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col transform transition-transform duration-300 scale-95 animate-scale-in">
+            <div className="flex justify-between items-center p-4 border-b border-gray-700 dark:border-gray-700 light:border-gray-300">
+              <h3 className="text-lg font-semibold text-blue-300 dark:text-blue-300 light:text-blue-600">{previewTitle}</h3>
+              <button onClick={() => setShowPreviewModal(false)} className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700 dark:hover:bg-gray-700 light:text-gray-600 light:hover:text-gray-800 light:hover:bg-gray-200" aria-label="Close preview">
                 <XCircle size={24} />
               </button>
             </div>
-            <div className="flex-grow p-4 overflow-y-auto text-gray-200 whitespace-pre-wrap custom-scrollbar">
+            <div className="flex-grow p-4 overflow-y-auto text-gray-200 dark:text-gray-200 light:text-gray-800 whitespace-pre-wrap custom-scrollbar">
               {previewContent || "No content to display."}
             </div>
           </div>
@@ -762,72 +818,3 @@ export default function App() {
     </div>
   );
 }
-
-// Custom CSS for scrollbar and tab buttons (Tailwind doesn't style scrollbars directly without plugins)
-// This would typically go into an index.css or a global CSS file
-// For this immersive, it's included here.
-const style = document.createElement('style');
-style.innerHTML = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: #374151; /* gray-700 */
-    border-radius: 10px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #60a5fa; /* blue-400 */
-    border-radius: 10px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #3b82f6; /* blue-500 */
-  }
-
-  .tab-button {
-    @apply px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2;
-  }
-
-  .btn {
-    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-900;
-  }
-
-  .pagination-button {
-    @apply p-2 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200;
-  }
-
-  /* React Markdown specific styles */
-  .prose {
-    color: var(--tw-prose-invert-body);
-  }
-  .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-    color: var(--tw-prose-invert-headings);
-  }
-  .prose strong {
-    color: var(--tw-prose-invert-bold);
-  }
-  .prose a {
-    color: var(--tw-prose-invert-links);
-  }
-  .prose ol, .prose ul {
-    color: var(--tw-prose-invert-li);
-  }
-  .prose code {
-    color: var(--tw-prose-invert-code);
-    background-color: var(--tw-prose-invert-code-bg);
-    padding: 0.2em 0.4em;
-    border-radius: 0.3em;
-  }
-  .prose pre {
-    background-color: var(--tw-prose-invert-pre-bg);
-    color: var(--tw-prose-invert-pre-code);
-    padding: 1em;
-    border-radius: 0.5em;
-    overflow-x: auto;
-  }
-  .prose pre code {
-    background-color: transparent;
-    padding: 0;
-  }
-`;
-document.head.appendChild(style);

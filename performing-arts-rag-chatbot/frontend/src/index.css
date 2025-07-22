@@ -2,31 +2,135 @@
 @tailwind components;
 @tailwind utilities;
 
-.btn {
-  @apply px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition;
-}
 /* Optional: Import Inter font from Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 body {
   font-family: 'Inter', sans-serif;
+  /* Apply theme background and text color by default */
+  @apply bg-gray-900 text-gray-100;
+}
+
+/* Light mode specific overrides */
+.light body {
+  @apply bg-gray-100 text-gray-900;
 }
 
 /* Custom scrollbar for better aesthetics */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;
+  height: 8px; /* For horizontal scrollbars if any */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: #374151; /* gray-700 */
   border-radius: 10px;
 }
+.light .custom-scrollbar::-webkit-scrollbar-track {
+  background: #e5e7eb; /* light gray */
+}
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #60a5fa; /* blue-400 */
   border-radius: 10px;
 }
-
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #3b82f6; /* blue-500 */
+}
+
+/* Base styles for common elements, can be overridden by specific components */
+.btn {
+  @apply px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-900;
+}
+.light .btn {
+  @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-offset-gray-100;
+}
+
+.tab-button {
+  @apply px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2;
+}
+
+.pagination-button {
+  @apply p-2 rounded-md bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200;
+}
+.light .pagination-button {
+  @apply bg-blue-200 text-blue-800 hover:bg-blue-300 disabled:bg-gray-300 disabled:text-gray-500;
+}
+
+
+/* React Markdown specific styles (Tailwind Typography equivalent) */
+/* These are manually defined to avoid adding @tailwindcss/typography plugin
+   If you add the plugin, you can remove these manual definitions and use 'prose dark:prose-invert' */
+.prose {
+  @apply text-gray-200; /* Default dark mode body text */
+}
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply text-gray-100; /* Default dark mode headings */
+}
+.prose strong {
+  @apply text-gray-50; /* Default dark mode bold text */
+}
+.prose a {
+  @apply text-blue-400 hover:text-blue-300; /* Default dark mode links */
+}
+.prose ol, .prose ul {
+  @apply text-gray-200; /* Default dark mode list items */
+}
+.prose code {
+  @apply text-pink-300 bg-gray-700 px-1 py-0.5 rounded; /* Default dark mode inline code */
+}
+.prose pre {
+  @apply bg-gray-700 text-gray-100 p-4 rounded-lg overflow-x-auto; /* Default dark mode code blocks */
+}
+.prose pre code {
+  @apply bg-transparent p-0; /* Override inline code styles within pre */
+}
+
+/* Light mode prose overrides */
+.light .prose {
+  @apply text-gray-800;
+}
+.light .prose h1, .light .prose h2, .light .prose h3, .light .prose h4, .light .prose h5, .light .prose h6 {
+  @apply text-gray-900;
+}
+.light .prose strong {
+  @apply text-gray-900;
+}
+.light .prose a {
+  @apply text-blue-600 hover:text-blue-700;
+}
+.light .prose ol, .light .prose ul {
+  @apply text-gray-800;
+}
+.light .prose code {
+  @apply text-pink-700 bg-gray-200;
+}
+.light .prose pre {
+  @apply bg-gray-200 text-gray-800;
+}
+
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out;
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
 }
