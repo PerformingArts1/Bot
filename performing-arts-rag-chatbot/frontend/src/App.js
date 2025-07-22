@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info, Moon, Sun } from 'lucide-react';
+import { Settings, MessageSquare, FileText, UploadCloud, Trash2, Search, ChevronLeft, ChevronRight, XCircle, Eye, Download, Send, Loader2, Info, Moon, Sun, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useDropzone } from 'react-dropzone';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -159,6 +159,8 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark'); // 'dark' or 'light'
 
   const chatHistoryRef = useRef(null); // Ref for auto-scrolling chat
+  const currentAssistantMessageRef = useRef(''); // Ref to build streamed assistant message
+  const currentAssistantSourcesRef = useRef([]); // Ref to hold sources for streamed message
 
   // Theme management
   useEffect(() => {
@@ -177,6 +179,26 @@ export default function App() {
     setShowToast(true);
   }, []);
 
+  // Function to copy text to clipboard
+  const copyToClipboard = useCallback((text) => {
+    // Using document.execCommand('copy') as navigator.clipboard.writeText() may not work in some iframe environments
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed"; // Avoid scrolling to bottom
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      showNotification('Copied to clipboard!', 'success');
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      showNotification('Failed to copy text.', 'error');
+    }
+    document.body.removeChild(textArea);
+  }, [showNotification]);
+
   // Socket.IO setup
   useEffect(() => {
     socket.on('connect', () => {
@@ -189,16 +211,57 @@ export default function App() {
       setSocketId(null);
     });
 
-    socket.on('chat_response', (data) => {
+    // Handle streaming chunks
+    socket.on('chat_stream_chunk', (data) => {
+      // Append chunk to the current assistant message being built
+      currentAssistantMessageRef.current += data.content;
+      setChatHistory((prevHistory) => {
+        const lastMessage = prevHistory[prevHistory.length - 1];
+        // If the last message is from the assistant and is being streamed, update it
+        if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+          return [
+            ...prevHistory.slice(0, -1),
+            { ...lastMessage, content: currentAssistantMessageRef.current }
+          ];
+        } else {
+          // Otherwise, start a new assistant message
+          return [
+            ...prevHistory,
+            { role: 'assistant', content: data.content, timestamp: new Date().toISOString(), isStreaming: true }
+          ];
+        }
+      });
+    });
+
+    // Handle complete chat response (after streaming finishes)
+    socket.on('chat_response_complete', (data) => {
+      setIsSendingMessage(false);
+      setIsAssistantTyping(false);
       if (data.success) {
-        setChatHistory(data.history); // Update full history from backend
+        // Update the final message in history, removing isStreaming flag
+        setChatHistory((prevHistory) => {
+          const finalContent = currentAssistantMessageRef.current;
+          const finalSources = data.sources; // Sources come with the complete message
+          const updatedHistory = prevHistory.map((msg, index) => {
+            if (index === prevHistory.length - 1 && msg.isStreaming) {
+              return { ...msg, content: finalContent, sources: finalSources, isStreaming: false };
+            }
+            return msg;
+          });
+          // If for some reason streaming didn't start correctly, ensure the full message is added
+          if (!updatedHistory[updatedHistory.length - 1] || updatedHistory[updatedHistory.length - 1].isStreaming) {
+             return [...data.history]; // Fallback to full history from backend
+          }
+          return updatedHistory;
+        });
+        currentAssistantMessageRef.current = ''; // Clear for next message
+        currentAssistantSourcesRef.current = []; // Clear for next message
       } else {
         showNotification(`Chat error: ${data.error}`, 'error');
-        // If an error occurred, the backend will have added an error message to history
-        setChatHistory(data.history);
+        setChatHistory(data.history); // Update with error message from backend
+        currentAssistantMessageRef.current = ''; // Clear
+        currentAssistantSourcesRef.current = []; // Clear
       }
-      setIsSendingMessage(false); // Ensure typing indicator is off
-      setIsAssistantTyping(false);
     });
 
     socket.on('typing_indicator', (data) => {
@@ -209,10 +272,8 @@ export default function App() {
       if (data.success) {
         showNotification(`Document "${data.original_filename}" processed. ${data.num_chunks} chunks indexed.`, 'success');
         fetchDocuments(); // Refresh document list after successful processing
-      } else {
-        // This should ideally not happen for success, but good fallback
+        setIsUploading(false); // Turn off upload loading
       }
-      // You could also update a specific document's status in the UI here
       console.log('Document processing status:', data);
     });
 
@@ -225,7 +286,8 @@ export default function App() {
     return () => {
       socket.off('connect');
       socket.off('disconnect');
-      socket.off('chat_response');
+      socket.off('chat_stream_chunk');
+      socket.off('chat_response_complete');
       socket.off('typing_indicator');
       socket.off('document_processing_status');
       socket.off('document_processing_error');
@@ -329,7 +391,7 @@ export default function App() {
         const data = await response.json();
         showNotification(`Document upload initiated for "${data.original_filename}". Processing in background.`, 'success');
         setUploadMessage(`Document upload initiated for "${data.original_filename}".`);
-        // No need to fetchDocuments immediately here, SocketIO will trigger it on completion
+        // SocketIO listeners will handle the rest (success/error, fetchDocuments, setIsUploading)
       } else {
         const errorData = await response.json();
         showNotification(`Upload failed: ${errorData.error || response.statusText}`, 'error');
@@ -341,7 +403,6 @@ export default function App() {
       setUploadMessage(`Error uploading file: ${error.message}`);
       setIsUploading(false); // Turn off loading if network error
     }
-    // Note: setIsUploading(false) is handled by SocketIO listeners on success/error
   }, [showNotification]);
 
   const handleDeleteDocument = useCallback(async (documentId, filename) => {
@@ -378,17 +439,20 @@ export default function App() {
     e.preventDefault();
     if (!currentMessage.trim()) return;
 
-    // Optimistically update UI with user message
+    // Optimistically add user message to history
     const userMessage = { role: 'user', content: currentMessage, timestamp: new Date().toISOString() };
     setChatHistory((prev) => [...prev, userMessage]);
     setCurrentMessage('');
     setIsSendingMessage(true);
     setIsAssistantTyping(true); // Start typing indicator immediately
 
+    // Reset current assistant message ref for streaming
+    currentAssistantMessageRef.current = '';
+    currentAssistantSourcesRef.current = [];
+
     try {
-      // API call is made, but response will come via Socket.IO for real-time update
+      // API call is made, but response content will be streamed via Socket.IO
       await api.sendMessage(userMessage.content);
-      // The socket.on('chat_response') listener will handle updating chatHistory
     } catch (error) {
       // Handle network errors if Socket.IO connection is also down
       const errorMessage = {
@@ -509,9 +573,21 @@ export default function App() {
               ) : (
                 chatHistory.map((msg, index) => (
                   <div key={index} className={`mb-4 p-3 rounded-lg animate-fade-in ${msg.role === 'user' ? 'bg-blue-900 dark:bg-blue-900 light:bg-blue-100 ml-auto text-right' : 'bg-gray-700 dark:bg-gray-700 light:bg-gray-200 mr-auto text-left'} max-w-[90%] sm:max-w-[75%] break-words`}>
-                    <p className="font-semibold text-sm mb-1">
-                      {msg.role === 'user' ? 'You' : 'Assistant'} <span className="text-gray-400 dark:text-gray-400 light:text-gray-500 text-xs ml-2">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                    </p>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="font-semibold text-sm">
+                        {msg.role === 'user' ? 'You' : 'Assistant'}
+                      </p>
+                      <div className="flex items-center text-xs text-gray-400 dark:text-gray-400 light:text-gray-500">
+                        <span>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                        <button
+                          onClick={() => copyToClipboard(msg.content)}
+                          className="ml-2 p-1 rounded-md hover:bg-gray-600 dark:hover:bg-gray-600 light:hover:bg-gray-300 transition-colors duration-150"
+                          title="Copy message"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
                     <ReactMarkdown
                       className="prose prose-invert max-w-none dark:prose-invert light:prose"
                       components={{

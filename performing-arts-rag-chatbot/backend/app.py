@@ -31,6 +31,14 @@ from unstructured.partition.api import PartitionUnstructuredError # Specific err
 # Import requests for direct Ollama API calls (e.g., listing models)
 import requests
 
+# Import BM25 for hybrid search
+from rank_bm25 import BM25Okapi
+
+# Import for re-ranking (conceptual)
+# Requires 'sentence-transformers' to be installed
+# from sentence_transformers import CrossEncoder # Uncomment if you fully implement re-ranking
+# import torch # Uncomment if you fully implement re-ranking and want MPS device
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -53,12 +61,19 @@ ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.docx'}
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 PREVIEW_CHAR_LIMIT = 10000 # For raw file content preview
+TOP_K_VECTOR_SEARCH = 5 # Number of documents to retrieve from vector store
+TOP_K_BM25_SEARCH = 5   # Number of documents to retrieve from BM25
+TOP_K_HYBRID_COMBINED = 7 # Number of documents to pass to LLM after hybrid search
+TOP_K_RE_RANKED = 5 # Number of documents to keep after re-ranking
 
 # --- Global Variables for RAG System (managed within app context or passed) ---
 llm = None
 embeddings = None
 vectorstore = None
 retrieval_chain = None
+bm25_retriever = None
+all_document_chunks = [] # To store all chunks for BM25 indexing
+re_ranker_model = None # New global for re-ranker model
 
 # In-memory caches (persisted to file)
 chat_history_data = []
@@ -78,7 +93,8 @@ executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 2) # Leverage M4 Max 
 def create_app():
     app = Flask(__name__)
     CORS(app)
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading') # Use threading for Flask-SocketIO
+    # Note: For production, you might want to configure message queue for SocketIO
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
     # Ensure all necessary directories exist
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -161,9 +177,37 @@ def create_app():
             json.dump(settings_to_save, f, indent=4)
         logger.info("LLM settings saved.")
 
+    # --- Re-ranking Function (Conceptual) ---
+    def re_rank_documents(query: str, documents: list[LangchainDocument]) -> list[LangchainDocument]:
+        """
+        Re-ranks a list of documents based on their relevance to the query
+        using a cross-encoder model.
+
+        NOTE: This is a conceptual implementation. To make it fully functional:
+        1. Ensure 'sentence-transformers' is installed (added to requirements.txt).
+        2. Uncomment the 'CrossEncoder' and 'torch' imports at the top.
+        3. The re-ranker model needs to be loaded once (e.g., in initialize_rag_system).
+           Downloading models can be large, so consider how to manage this (e.g., Docker build arg).
+        4. The 'device' parameter for CrossEncoder should ideally be 'mps' for Mac M-series GPU.
+        """
+        if not documents:
+            return []
+
+        # Example placeholder for re-ranking logic
+        # if re_ranker_model:
+        #     pairs = [(query, doc.page_content) for doc in documents]
+        #     # Ensure model is on the correct device (e.g., 'mps' for Apple Silicon)
+        #     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+        #     scores = re_ranker_model.predict(pairs, convert_to_tensor=True, device=device).tolist()
+        #     ranked_docs = [doc for score, doc in sorted(zip(scores, documents), reverse=True)]
+        #     return ranked_docs[:TOP_K_RE_RANKED] # Return top K after re-ranking
+        # else:
+        #     logger.warning("Re-ranker model not initialized. Skipping re-ranking.")
+        return documents # Return documents as is if re-ranker not active
+
     # --- RAG System Initialization and Updates ---
     def initialize_rag_system():
-        nonlocal llm, embeddings, vectorstore, retrieval_chain
+        nonlocal llm, embeddings, vectorstore, retrieval_chain, bm25_retriever, all_document_chunks, re_ranker_model
 
         load_llm_settings()
         load_documents_metadata()
@@ -186,11 +230,9 @@ def create_app():
             logger.critical(f"Could not initialize Ollama LLM or Embeddings. Is Ollama running and models pulled? Error: {e}")
             llm = None
             embeddings = None
-            # Do not return here, allow the app to start even if LLM is down, but RAG chain will be None
             return
 
         try:
-            # Check if vectorstore exists and is valid, otherwise create new
             if os.path.exists(PERSIST_DIRECTORY) and os.path.isdir(PERSIST_DIRECTORY) and len(os.listdir(PERSIST_DIRECTORY)) > 0:
                 vectorstore = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings)
                 logger.info(f"Loaded ChromaDB from {PERSIST_DIRECTORY}")
@@ -200,23 +242,101 @@ def create_app():
                 vectorstore.persist()
                 logger.info(f"Created new ChromaDB at {PERSIST_DIRECTORY}.")
 
+            # Load all document chunks for BM25 indexing
+            all_document_chunks = []
+            if vectorstore:
+                try:
+                    # Retrieve all documents from Chroma to build BM25 index
+                    # This might be slow for very large datasets; consider optimizing if needed
+                    all_chroma_docs = vectorstore._collection.get(ids=vectorstore._collection.get()['ids'], include=['documents', 'metadatas'])
+                    for i, doc_content in enumerate(all_chroma_docs['documents']):
+                        all_document_chunks.append(
+                            LangchainDocument(
+                                page_content=doc_content,
+                                metadata=all_chroma_docs['metadatas'][i]
+                            )
+                        )
+                    logger.info(f"Loaded {len(all_document_chunks)} chunks from ChromaDB for BM25 indexing.")
+                    if all_document_chunks:
+                        tokenized_corpus = [doc.page_content.split(" ") for doc in all_document_chunks]
+                        bm25_retriever = BM25Okapi(tokenized_corpus)
+                        logger.info("BM25 retriever initialized.")
+                    else:
+                        bm25_retriever = None
+                        logger.info("No documents to initialize BM25 retriever.")
+                except Exception as e:
+                    logger.error(f"Error loading documents from Chroma for BM25: {e}")
+                    bm25_retriever = None
+
+            # Initialize re-ranker model (conceptual)
+            # if torch.backends.mps.is_available():
+            #     re_ranker_device = 'mps'
+            #     logger.info("PyTorch MPS (Metal) backend available for re-ranker.")
+            # else:
+            #     re_ranker_device = 'cpu'
+            #     logger.warning("PyTorch MPS (Metal) backend not available for re-ranker, using CPU.")
+            # try:
+            #     re_ranker_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device=re_ranker_device)
+            #     logger.info("Re-ranker model initialized.")
+            # except Exception as e:
+            #     logger.error(f"Could not initialize re-ranker model: {e}. Re-ranking will be skipped.")
+            #     re_ranker_model = None
+
         except Exception as e:
             logger.critical(f"Critical error loading or creating ChromaDB. RAG functionality will fail. Error: {e}")
             vectorstore = None
+            bm25_retriever = None
+            re_ranker_model = None
             return
 
         _create_rag_chain()
         logger.info("RAG system initialization sequence complete.")
 
     def _create_rag_chain():
-        nonlocal retrieval_chain, llm, vectorstore
+        nonlocal retrieval_chain, llm, vectorstore, bm25_retriever
 
         if llm is None or vectorstore is None:
             logger.error("Cannot create RAG chain: LLM or Vectorstore not initialized. RAG functionality will be limited/unavailable.")
             retrieval_chain = None
             return
 
-        # Define the prompt template for the RAG chain
+        # Define a custom retriever that combines vector and BM25 search
+        class HybridRetriever:
+            def __init__(self, vectorstore_retriever, bm25_retriever, all_chunks, k_vector, k_bm25, k_combined):
+                self.vectorstore_retriever = vectorstore_retriever
+                self.bm25_retriever = bm25_retriever
+                self.all_chunks = all_chunks
+                self.k_vector = k_vector
+                self.k_bm25 = k_bm25
+                self.k_combined = k_combined
+
+            def get_relevant_documents(self, query):
+                # 1. Vector Search
+                vector_docs = self.vectorstore_retriever.get_relevant_documents(query)
+                vector_docs = vector_docs[:self.k_vector]
+
+                # 2. BM25 Search
+                bm25_docs = []
+                if self.bm25_retriever and self.all_chunks:
+                    tokenized_query = query.lower().split(" ")
+                    doc_scores = self.bm25_retriever.get_scores(tokenized_query)
+                    top_bm25_indices = sorted(range(len(doc_scores)), key=lambda i: doc_scores[i], reverse=True)[:self.k_bm25]
+                    bm25_docs = [self.all_chunks[i] for i in top_bm25_indices]
+
+                # 3. Combine and Deduplicate
+                combined_docs = {}
+                for doc in vector_docs + bm25_docs:
+                    doc_id_chunk_index = f"{doc.metadata.get('document_id', '')}-{doc.metadata.get('chunk_index', '')}"
+                    if doc_id_chunk_index and doc_id_chunk_index not in combined_docs:
+                        combined_docs[doc_id_chunk_index] = doc
+
+                final_docs = list(combined_docs.values())
+
+                # 4. Re-ranking step (if re_ranker_model is initialized)
+                final_docs = re_rank_documents(query, final_docs) # Call the re-ranking function
+
+                return final_docs[:self.k_combined]
+
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a helpful assistant. Answer the user's questions based on the provided context. If you don't know the answer, just say that you don't know, don't try to make up an answer. Provide sources for your answers, referencing the original filename, chunk index, and document ID."),
             ("placeholder", "{chat_history}"),
@@ -224,27 +344,22 @@ def create_app():
         ])
 
         document_chain = create_stuff_documents_chain(llm, prompt)
-        # Configure retriever for hybrid search (semantic + keyword)
-        # Chroma's .as_retriever() doesn't directly support hybrid search out-of-the-box in this manner.
-        # For a true hybrid search, you'd typically implement a custom retriever that combines
-        # results from vectorstore.similarity_search_with_score and a keyword search (e.g., BM25).
-        # For demonstration, we'll keep the standard retriever and note the enhancement.
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5}) # Retrieve top 5 documents
+        vectorstore_retriever_instance = vectorstore.as_retriever(search_kwargs={"k": TOP_K_VECTOR_SEARCH})
 
-        # Conceptual re-ranking step (requires a re-ranking model)
-        # def re_rank_documents(query, documents):
-        #     # Placeholder for re-ranking logic using a cross-encoder model
-        #     # For example, using a SentenceTransformers cross-encoder:
-        #     # from sentence_transformers import CrossEncoder
-        #     # model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        #     # scores = model.predict([(query, doc.page_content) for doc in documents])
-        #     # ranked_docs = [doc for _, doc in sorted(zip(scores, documents), reverse=True)]
-        #     # return ranked_docs
-        #     return documents # No re-ranking implemented yet
+        # Create the hybrid retriever instance
+        hybrid_retriever_instance = HybridRetriever(
+            vectorstore_retriever_instance,
+            bm25_retriever,
+            all_document_chunks,
+            TOP_K_VECTOR_SEARCH,
+            TOP_K_BM25_SEARCH,
+            TOP_K_HYBRID_COMBINED
+        )
 
-        # retrieval_chain = create_retrieval_chain(retriever | (lambda x: re_rank_documents(x['input'], x['context'])), document_chain)
-        retrieval_chain = create_retrieval_chain(retriever, document_chain)
-        logger.info("RAG retrieval chain created/re-created.")
+        # LangChain's create_retrieval_chain expects a retriever object, not a function
+        # The `invoke` method of the created chain will then call `get_relevant_documents` on the retriever.
+        retrieval_chain = create_retrieval_chain(hybrid_retriever_instance, document_chain)
+        logger.info("RAG retrieval chain created/re-created with Hybrid Search and Re-ranking.")
 
     # --- Utility Functions ---
     def allowed_file(filename):
@@ -252,10 +367,10 @@ def create_app():
 
     # --- Background Document Processing Task ---
     def process_document_background(filepath, original_filename, document_id, socket_sid):
+        nonlocal bm25_retriever, all_document_chunks # Allow modification of these globals
         with app.app_context():
             try:
                 socketio.emit('document_processing_status', {'id': document_id, 'status': 'Parsing file...', 'progress': 10}, room=socket_sid)
-                # Validate file content using python-magic
                 mime = magic.Magic(mime=True)
                 file_type = mime.from_file(filepath)
                 allowed_content_types = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/octet-stream']
@@ -330,6 +445,18 @@ def create_app():
                     "num_chunks": len(langchain_docs)
                 }
                 save_documents_metadata()
+
+                # After adding documents to Chroma, update the BM25 index
+                all_document_chunks.extend(langchain_docs)
+                if all_document_chunks:
+                    tokenized_corpus = [doc.page_content.split(" ") for doc in all_document_chunks]
+                    bm25_retriever = BM25Okapi(tokenized_corpus)
+                    logger.info("BM25 retriever re-initialized after new document upload.")
+                else:
+                    bm25_retriever = None
+
+                _create_rag_chain() # Re-create the RAG chain with the updated BM25 retriever
+
                 socketio.emit('document_processing_status', {'id': document_id, 'status': 'Indexing complete!', 'progress': 100, 'success': True, 'original_filename': original_filename, 'num_chunks': len(langchain_docs)}, room=socket_sid)
                 logger.info(f"Document {original_filename} (ID: {document_id}) processed successfully.")
 
@@ -372,19 +499,10 @@ def create_app():
             file.save(filepath)
             logger.info(f"File saved to {filepath} for background processing.")
 
-            # Get the SID from the request headers or query params if possible,
-            # or rely on client to connect to SocketIO and send its SID.
-            # For simplicity, we'll assume the frontend will send its SID with the upload request.
-            # Or, for a simple upload, we might not need the SID here and let the frontend poll.
-            # For this implementation, let's assume SID is passed in form data for simplicity.
             socket_sid = request.form.get('socket_sid')
             if not socket_sid:
-                logger.warning("No socket_sid provided for document processing status updates.")
-                # Proceed without real-time updates if SID is missing
-                # Or return an error if real-time updates are mandatory
-                pass
+                logger.warning("No socket_sid provided for document processing status updates. Real-time updates will not be sent.")
 
-            # Offload document processing to a background thread
             executor.submit(process_document_background, filepath, original_filename, document_id, socket_sid)
 
             return jsonify({
@@ -392,7 +510,7 @@ def create_app():
                 "message": "Document upload initiated. Processing in background.",
                 "id": document_id,
                 "original_filename": original_filename
-            }), 202 # 202 Accepted for background processing
+            }), 202
 
         except Exception as e:
             logger.exception(f"Error initiating document upload for {original_filename}: {e}")
@@ -436,6 +554,7 @@ def create_app():
 
     @app.route('/delete_document/<document_id>', methods=['DELETE'])
     def delete_document(document_id):
+        nonlocal bm25_retriever, all_document_chunks # Allow modification of these globals
         if document_id not in documents_metadata:
             return jsonify({"success": False, "error": "Document not found"}), 404
 
@@ -460,6 +579,18 @@ def create_app():
 
             del documents_metadata[document_id]
             save_documents_metadata()
+
+            # Rebuild BM25 index after document deletion
+            all_document_chunks = [doc for doc in all_document_chunks if doc.metadata.get('document_id') != document_id]
+            if all_document_chunks:
+                tokenized_corpus = [doc.page_content.split(" ") for doc in all_document_chunks]
+                bm25_retriever = BM25Okapi(tokenized_corpus)
+                logger.info("BM25 retriever re-initialized after document deletion.")
+            else:
+                bm25_retriever = None
+                logger.info("No documents left, BM25 retriever cleared.")
+
+            _create_rag_chain() # Re-create the RAG chain with the updated BM25 retriever
 
             return jsonify({"success": True, "message": "Document deleted successfully"}), 200
         except Exception as e:
@@ -498,10 +629,6 @@ def create_app():
         if not user_message_content:
             return jsonify({"success": False, "error": "No message provided"}), 400
 
-        # Append user message immediately (frontend will handle its own display)
-        # We'll rely on SocketIO to push the full history update for consistency
-        # Or, the frontend can optimistically update and then correct/confirm with SocketIO.
-
         try:
             if retrieval_chain is None:
                 initialize_rag_system()
@@ -509,8 +636,9 @@ def create_app():
                     error_message = "RAG system not fully initialized after retry. Please check backend logs and ensure Ollama is running."
                     chat_history_data.append({"role": "assistant", "content": error_message, "timestamp": datetime.datetime.now().isoformat(), "isError": True})
                     save_chat_history()
-                    socketio.emit('chat_response', {'success': False, 'error': error_message, 'history': chat_history_data}, room=request.sid)
-                    return jsonify({"success": False, "error": error_message}), 500 # Still return HTTP response
+                    # Emit final response for error case
+                    socketio.emit('chat_response_complete', {'success': False, 'error': error_message, 'history': chat_history_data}, room=request.sid)
+                    return jsonify({"success": False, "error": error_message}), 500
 
             messages_for_llm = []
             for msg in chat_history_data:
@@ -519,18 +647,31 @@ def create_app():
                 elif msg["role"] == "assistant" and not msg.get("isError", False):
                     messages_for_llm.append(AIMessage(content=msg["content"]))
 
-            # Emit typing indicator
             socketio.emit('typing_indicator', {'status': True}, room=request.sid)
 
-            response = retrieval_chain.invoke({
-                "input": user_message_content,
-                "chat_history": messages_for_llm # Pass full history for context
-            })
+            # Perform retrieval using the custom hybrid retriever
+            retrieved_docs = retrieval_chain.retriever.get_relevant_documents(user_message_content)
 
-            response_content = response["answer"]
+            # Prepare context for LLM
+            context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
+            # Construct the full prompt for the LLM, including chat history and context
+            full_prompt_messages = [
+                ("system", "You are a helpful assistant. Answer the user's questions based on the provided context. If you don't know the answer, just say that you don't know, don't try to make up an answer. Provide sources for your answers, referencing the original filename, chunk index, and document ID."),
+                *messages_for_llm, # Include previous chat history
+                ("human", f"Context: {context_text}\n\nQuestion: {user_message_content}"),
+            ]
+
+            # Stream response from LLM
+            full_response_content = ""
+            for chunk in llm.stream(full_prompt_messages):
+                if chunk.content:
+                    full_response_content += chunk.content
+                    # Emit each chunk as it arrives
+                    socketio.emit('chat_stream_chunk', {'content': chunk.content}, room=request.sid)
+
             sources = []
-            if "context" in response:
-                for i, doc in enumerate(response["context"]):
+            if retrieved_docs:
+                for i, doc in enumerate(retrieved_docs):
                     source_info = {
                         "original_filename": doc.metadata.get("original_filename", "N/A"),
                         "chunk_index": doc.metadata.get("chunk_index", "N/A"),
@@ -542,17 +683,18 @@ def create_app():
 
             assistant_response_data = {
                 "success": True,
-                "response": response_content,
+                "response": full_response_content,
                 "sources": sources,
                 "timestamp": datetime.datetime.now().isoformat()
             }
 
-            # Append assistant response to history
+            # Append user message and assistant response to history
+            chat_history_data.append({"role": "user", "content": user_message_content, "timestamp": datetime.datetime.now().isoformat()})
             chat_history_data.append({"role": "assistant", "content": assistant_response_data["response"], "timestamp": assistant_response_data["timestamp"], "sources": assistant_response_data["sources"]})
             save_chat_history()
 
-            # Emit the full updated history via WebSocket
-            socketio.emit('chat_response', {'success': True, 'history': chat_history_data}, room=request.sid)
+            # Emit final chat response with full history and sources
+            socketio.emit('chat_response_complete', {'success': True, 'history': chat_history_data, 'sources': sources}, room=request.sid)
             socketio.emit('typing_indicator', {'status': False}, room=request.sid)
 
             return jsonify(assistant_response_data), 200
@@ -562,20 +704,20 @@ def create_app():
             error_message = f"An error occurred while processing your request: {e}. Please check the backend console."
             chat_history_data.append({"role": "assistant", "content": error_message, "timestamp": datetime.datetime.now().isoformat(), "isError": True})
             save_chat_history()
-            socketio.emit('chat_response', {'success': False, 'error': error_message, 'history': chat_history_data}, room=request.sid)
+            socketio.emit('chat_response_complete', {'success': False, 'error': error_message, 'history': chat_history_data}, room=request.sid)
             socketio.emit('typing_indicator', {'status': False}, room=request.sid)
             return jsonify({"success": False, "error": error_message}), 500
 
     @app.route('/chat_history', methods=['GET'])
-    def get_chat_history_api(): # Renamed to avoid conflict with internal function
+    def get_chat_history_api():
         return jsonify({"success": True, "history": chat_history_data}), 200
 
     @app.route('/clear_chat_history', methods=['POST'])
-    def clear_chat_history_api(): # Renamed to avoid conflict
+    def clear_chat_history_api():
         nonlocal chat_history_data
         chat_history_data = []
         save_chat_history()
-        socketio.emit('chat_response', {'success': True, 'history': chat_history_data}, room=request.sid) # Notify clients
+        socketio.emit('chat_response_complete', {'success': True, 'history': chat_history_data}, room=request.sid)
         return jsonify({"success": True, "message": "Chat history cleared"}), 200
 
     @app.route('/llm_settings', methods=['GET'])
@@ -596,7 +738,7 @@ def create_app():
         new_model = data.get('model', LLM_MODEL)
         new_temperature = float(data.get('temperature', LLM_TEMPERATURE))
         new_top_k = int(data.get('top_k', LLM_TOP_K))
-        new_top_p = float(data.get('top_p', LLM_TOP_P)) # Corrected typo here
+        new_top_p = float(data.get('top_p', LLM_TOP_P))
 
         if not (0.0 <= new_temperature <= 2.0):
             return jsonify({"success": False, "error": "Temperature must be between 0.0 and 2.0"}), 400
@@ -613,7 +755,7 @@ def create_app():
             LLM_MODEL = new_model
             LLM_TEMPERATURE = new_temperature
             LLM_TOP_K = new_top_k
-            LLM_TOP_P = new_top_p # Corrected typo here
+            LLM_TOP_P = new_top_p
 
             try:
                 llm = Ollama(
@@ -666,15 +808,11 @@ def create_app():
             logger.exception(f"An unexpected error occurred while fetching Ollama models: {e}")
             return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}"}), 500
 
-    # Initialize RAG system when the app is created
     with app.app_context():
         initialize_rag_system()
 
-    return app, socketio # Return both app and socketio instance
+    return app, socketio
 
-# This block is for running the app directly (e.g., `python app.py`)
-# When using gunicorn, it will call `app:create_app()`
 if __name__ == '__main__':
     app, socketio = create_app()
-    # Use socketio.run for development, gunicorn for production
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
